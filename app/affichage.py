@@ -19,7 +19,6 @@ from shapely.geometry import LineString
 
 
 
-
 FPS = 60
 LEFT = 1
 BLACK = (0, 0, 0)
@@ -91,15 +90,6 @@ def in_rect(points, x, y):
     return points[0] <= x and points[3] <= y and points[1] >= y and points[2] >= x
 
 
-def intersect(A, B, C, D):
-    xdiff = (A[0] - B[0], C[0] - D[0])
-    ydiff = (A[1] - B[1], C[1] - D[1])
-    def det(a, b):
-        return a[0] * b[1] - a[1] * b[0]
-    div = det(xdiff, ydiff)
-    return div != 0
-
-
 def in_poly(point, polyPoints, farAwayPoint):
     line1 = LineString(polyPoints)
     line2 = LineString([point, farAwayPoint])
@@ -144,6 +134,40 @@ def from_json(data):
 def to_json(l_c):
     return [x.to_json() for x in l_c]
 
+
+def format_text(text, font_size, width, height):
+    n = text.split(" ")
+    ok = False
+    while not ok:
+        end, p, m, l = True, int(width / font_size - 1), [], []
+        ll = len(l)
+        for w in n:
+            if len(w) + 1 > p:
+                font_size -= 1
+                end = False
+                break
+        if end:
+            for w in n:
+                if ll + len(w) + 1 <= p:
+                    l.append(w)
+                    ll += len(w)
+                else:
+                    m.append(l)
+                    l = [w]
+                    ll = len(w)
+            m.append(l)
+            if len(m) * font_size > height:
+                font_size -= 1
+            else:
+                ok = True
+    return m, font_size
+
+
+def blit_text(surface, text, pos, font_size, w, h, color=pygame.Color('black')):
+    pass
+
+
+
 data = json.load(open("Country.json"))
 l_c = from_json(data)
 
@@ -158,7 +182,7 @@ pygame.display.set_caption('Name')
 screen.fill(BG)
 screen.blit(font.render("Simulation", True, FG), (40, 10))
 
-country_name_mask = pygame.Surface((500, 100), pygame.SRCALPHA)
+country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
 country_name_mask.fill(BG)
 screen.blit(country_name_mask, (1550, 0))
 
@@ -213,10 +237,9 @@ while True:
     if changed:
         changed = False
         del country_name_mask
-        country_name_mask = pygame.Surface((500, 100), pygame.SRCALPHA)
+        country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
         country_name_mask.fill(BG)
         screen.blit(country_name_mask, (1550, 0))
-        screen.blit(title_font.render(f"{country.name}", True, FG), (1670, 40))
 
     pygame.display.update()
 

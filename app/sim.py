@@ -1,4 +1,5 @@
-from affichage import afficher_sim
+#from affichage import afficher_sim
+
 
 class SIR:
 
@@ -61,7 +62,6 @@ class SIR:
         d = self.format_sim()
         a = "\n\t- ".join([f"{x} : {d[x]}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :\n\t- {a}"
-
 
 
 class SIRM:
@@ -134,10 +134,37 @@ class SIRM:
         a = "\n- " + "\n- ".join([f"{x} : {int(d[x][-1] * self.N)}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :{a}"
 
+text = """République populaire de Chine"""
 
-if __name__ == "__main__":
-    sim = SIRM(1000, 1, 0.5, 14, 0.02, 25)
-    sim.simuler()
-    print(sim)
-    out = sim.format_sim()
-    afficher_sim(out)
+font_size = 60
+width = 80
+h = 4
+n = text.split(" ")
+ok = False
+while not ok:
+    end = True
+    p = int(width / font_size - 1)
+    m = []
+    l = []
+    ll = len(l)
+    for w in n:
+        if len(w) + 1 > p:
+            font_size -= 1
+            end = False
+            break
+    if end:
+        for w in n:
+            if ll + len(w) + 1 <= p:
+                l.append(w)
+                ll += len(w)
+            else:
+                m.append(l)
+                l = [w]
+                ll = len(w)
+        m.append(l)
+        if len(m) * font_size > h:
+            font_size -= 1
+        else:
+            ok = True
+print(m, font_size)
+
