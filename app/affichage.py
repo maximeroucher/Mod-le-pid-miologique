@@ -1,15 +1,32 @@
 import json
-import tkinter as tk
+import os
 import random
-import tqdm
+import tkinter as tk
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Mute l'import de pygame
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
+
+import pygame
 import shapefile
+import tqdm
 from dbfread import DBF, read
 from matplotlib.patches import Polygon
+from shapely.geometry import LineString
 
+
+
+
+FPS = 60
+LEFT = 1
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+BG = (32, 34, 37)
+FG = (182, 185, 190)
+SCALE = 4.2
 
 def format_data():
     """ Ouvre le fichier des données mondiales et en récupère les données utiles à la simulation
@@ -70,18 +87,65 @@ def afficher_sim(data):
     plt.show()
 
 
+def in_rect(points, x, y):
+    return points[0] <= x and points[3] <= y and points[1] >= y and points[2] >= x
 
-import pygame
+
+def intersect(A, B, C, D):
+    xdiff = (A[0] - B[0], C[0] - D[0])
+    ydiff = (A[1] - B[1], C[1] - D[1])
+    def det(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+    div = det(xdiff, ydiff)
+    return div != 0
+
+
+def in_poly(point, polyPoints, farAwayPoint):
+    line1 = LineString(polyPoints)
+    line2 = LineString([point, farAwayPoint])
+    return line1.intersection(line2)
+
+
+class Pays():
+
+    def __init__(self, tag, name, pop, pib, border, bound):
+        self.tag = tag
+        self.name = name
+        self.pop = pop
+        self.pib = pib
+        self.border = border
+        self.bound = bound
+        self.r = random.randint(0, 70)
+        self.g = random.randint(100, 170)
+        self.b = random.randint(200, 245)
+
+    def show(self):
+        for point in self.border:
+            pygame.draw.polygon(screen, (self.r, self.g, self.b), point)
+            pygame.draw.lines(screen, WHITE, True, point, 1)
+
+    def show_border(self):
+        for rect in self.bound:
+            pygame.draw.lines(screen, (255, 0, 0), True, [(rect[0], rect[1]),
+                                                          (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])], 1)
+
+    def to_json(self):
+        return {self.tag: {"NAME_FR": self.name, "POP_EST": self.pop, "GDP_MD_EST": self.pib, "geometry": self.border, "bounds": self.bound}}
+
+
+def from_json(data):
+    l_c = []
+    for c in data:
+        n = list(c.keys())[0]
+        sc = c[n]
+        l_c.append(Pays(n, sc["NAME_FR"], sc["POP_EST"], sc["GDP_MD_EST"], sc["geometry"], sc["bounds"]))
+    return l_c
+
+def to_json(l_c):
+    return [x.to_json() for x in l_c]
 
 data = json.load(open("Country.json"))
-
-FPS = 60
-LEFT = 1
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-BG = (32, 34, 37)
-FG = (182, 185, 190)
-SCALE = 4.2
+l_c = from_json(data)
 
 pygame.init()
 font = pygame.font.SysFont("montserrat", 24)
@@ -93,7 +157,11 @@ pygame.display.set_caption('Name')
 
 screen.fill(BG)
 screen.blit(font.render("Simulation", True, FG), (40, 10))
-screen.blit(title_font.render("Test", True, FG), (1670, 40))
+
+country_name_mask = pygame.Surface((500, 100), pygame.SRCALPHA)
+country_name_mask.fill(BG)
+screen.blit(country_name_mask, (1550, 0))
+
 screen.blit(font.render("Population de départ", True, FG), (1600, 130))
 screen.blit(data_font.render("1056135", True, FG), (1670, 170))
 
@@ -114,18 +182,16 @@ screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
 screen.blit(font.render("Evolution locale", True, FG), (1200, 650))
 
 
-for c in data:
-    for sc in list(c.values())[0]["geometry"]:
-        pts = []
-        for point in sc:
-            c_pt = [(point[0] + 180) * SCALE + 20, (90 - point[1]) * SCALE + 15]
-            pts.append(c_pt)
+for c in l_c:
+    c.show()
 
-        b = random.randint(200, 245)
-        g = random.randint(100, 170)
-        r = random.randint(0, 70)
-        pygame.draw.polygon(screen, (r, g, b), pts)
-        pygame.draw.lines(screen, WHITE, True, pts, 1)
+
+c_name = [x.name for x in l_c]
+
+c_bound = [x.bound for x in l_c]
+
+country = None
+changed = False
 
 while True:
     clock.tick(FPS)
@@ -135,25 +201,28 @@ while True:
             quit()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
             x, y = pygame.mouse.get_pos()
+            for c in l_c:
+                for cb in c.bound:
+                    if in_rect(cb, x, y):
+                        for b in c.border:
+                            if in_poly((x, y), b, (x + 1000, y + 1000)):
+                                if c != country:
+                                    country = c
+                                    changed = True
+                                break
+    if changed:
+        changed = False
+        del country_name_mask
+        country_name_mask = pygame.Surface((500, 100), pygame.SRCALPHA)
+        country_name_mask.fill(BG)
+        screen.blit(country_name_mask, (1550, 0))
+        screen.blit(title_font.render(f"{country.name}", True, FG), (1670, 40))
 
     pygame.display.update()
 
-
-def counterclockwise(A, B, C):
-    return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
-
-
-def segment_intersect(A, B, C, D):
-    return counterclockwise(
-        A, C, D) != counterclockwise(
-        B, C, D) and counterclockwise(
-        A, B, C) != counterclockwise(
-        A, B, D)
-
-
-def in_poly(point, polyPoints, farAwayPoint):
-    intersections = 0
-    for i in range(len(polyPoints) - 1):
-        if segment_intersect(point, farAwayPoint,  polyPoints[i], polyPoints[i + 1]):
-            intersections += 1
-    return intersections % 2 != 0
+# TODO:
+#       centrer texte
+#       graphique
+#       chgt couleur quand séléctionné (+ border ?)
+#       chgt couleur hover ?
+#        
