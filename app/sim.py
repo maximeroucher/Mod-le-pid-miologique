@@ -134,37 +134,27 @@ class SIRM:
         a = "\n- " + "\n- ".join([f"{x} : {int(d[x][-1] * self.N)}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :{a}"
 
-text = """République populaire de Chine"""
 
-font_size = 60
-width = 80
-h = 4
-n = text.split(" ")
-ok = False
-while not ok:
-    end = True
-    p = int(width / font_size - 1)
-    m = []
-    l = []
-    ll = len(l)
-    for w in n:
-        if len(w) + 1 > p:
-            font_size -= 1
-            end = False
-            break
-    if end:
-        for w in n:
-            if ll + len(w) + 1 <= p:
-                l.append(w)
-                ll += len(w)
-            else:
-                m.append(l)
-                l = [w]
-                ll = len(w)
-        m.append(l)
-        if len(m) * font_size > h:
-            font_size -= 1
+text = "15/15 cours de math"
+
+def check(t):
+    return all([x.isdigit() or x == "/" for x in t])
+
+t = "cours"
+print(check(t))
+
+def split_text(text):
+    x = []
+    a = ""
+    part = text.split(' ')
+    for p in part:
+        print(p)
+        if check(p):
+            x.append(p)
         else:
-            ok = True
-print(m, font_size)
+            a += p + " "
+    x.append(a.strip())
+    return x
+
+print(split_text(text))
 

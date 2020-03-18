@@ -138,33 +138,43 @@ def to_json(l_c):
 def format_text(text, font_size, width, height):
     n = text.split(" ")
     ok = False
+    font = pygame.font.SysFont("montserrat", font_size)
     while not ok:
-        end, p, m, l = True, int(width / font_size - 1), [], []
+        end, m, l = True, [], []
+        w_l = {w: font.size(w + " ") for w in n}
         ll = len(l)
         for w in n:
-            if len(w) + 1 > p:
+            if w_l[w][0] > width:
                 font_size -= 1
                 end = False
                 break
         if end:
             for w in n:
-                if ll + len(w) + 1 <= p:
+                size = w_l[w][0]
+                if ll + size <= width:
                     l.append(w)
-                    ll += len(w)
+                    ll += size
                 else:
                     m.append(l)
                     l = [w]
-                    ll = len(w)
+                    ll = size
             m.append(l)
-            if len(m) * font_size > height:
+            h_v = 0
+            if len(m) * font.size(m[0][0])[1] > height:
                 font_size -= 1
             else:
                 ok = True
-    return m, font_size
+        font = pygame.font.SysFont("montserrat", font_size)
+    m = [" ".join(x) for x in m]
+    return m, font
 
 
-def blit_text(surface, text, pos, font_size, w, h, color=pygame.Color('black')):
-    pass
+def blit_text(surface, text, pos, font_size, w, h, color=FG):
+    l, t = pos
+    text, font = format_text(text, font_size, w, h)
+    for x in range(len(text)):
+        wi, he = font.size(text[x])
+        surface.blit(font.render(text[x], True, color), (l + (w - wi) // 2, t + x * he))
 
 
 
@@ -175,7 +185,9 @@ pygame.init()
 font = pygame.font.SysFont("montserrat", 24)
 title_font = pygame.font.SysFont("montserrat", 44)
 data_font = pygame.font.SysFont("montserrat", 18)
-screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
+info = pygame.display.Info()
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
 clock = pygame.time.Clock()
 pygame.display.set_caption('Name')
 
@@ -236,15 +248,15 @@ while True:
                                 break
     if changed:
         changed = False
-        del country_name_mask
         country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
         country_name_mask.fill(BG)
         screen.blit(country_name_mask, (1550, 0))
+        blit_text(screen, country.name, (1600, 50), 60, 300, 80)
+        
 
     pygame.display.update()
 
 # TODO:
-#       centrer texte
 #       graphique
 #       chgt couleur quand séléctionné (+ border ?)
 #       chgt couleur hover ?
