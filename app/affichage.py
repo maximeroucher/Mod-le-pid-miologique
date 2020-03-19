@@ -77,7 +77,9 @@ def create_map():
 def afficher_sim(data):
     """ Affiche le résultat de la simulation
     ---
-    param : data (dict[label : list])
+    param :
+
+        - data (dict(label: list))
     """
     axe_x = list(range(len(list(data.values())[0])))
     for x in list(data.keys()):
@@ -87,10 +89,26 @@ def afficher_sim(data):
 
 
 def in_rect(points, x, y):
+    """ Vérifie si un point est dans un rectangle
+    ---
+    param :
+
+        - points (list) liste des points (l, r, t, l)
+        - x (int) position x de la souris
+        - y (int) position y de la souris
+    """
     return points[0] <= x and points[3] <= y and points[1] >= y and points[2] >= x
 
 
 def in_poly(point, polyPoints, farAwayPoint):
+    """ Vérifie si un point est dans un polygone
+    ---
+    param :
+
+        - point (tuple(x, y)) point à verifier
+        - polypoint (list(tuple)) liste des points d'un polygone
+        - farAwayPoint (tuple(x, y)) point à très longue distance
+    """
     line1 = LineString(polyPoints)
     line2 = LineString([point, farAwayPoint])
     return line1.intersection(line2)
@@ -99,31 +117,68 @@ def in_poly(point, polyPoints, farAwayPoint):
 class Pays():
 
     def __init__(self, tag, name, pop, pib, border, bound):
+        """ Initialisation d'un pays
+        ---
+        param :
+
+            - tag (str) le format du nom de pays
+            - name (str) le nom français du pays
+            - pop (int) la population estimée du pays
+            - pib (float) le PIB du pays (en dollar)
+            - border (list(tuple)) le contour du pays
+            - bound (list(tuple)) le carré dans lequel le pays est inscrit
+        """
         self.tag = tag
         self.name = name
         self.pop = pop
         self.pib = pib
         self.border = border
         self.bound = bound
-        self.r = random.randint(0, 70)
-        self.g = random.randint(100, 170)
-        self.b = random.randint(200, 245)
+        self.r = random.randint(0, 50)
+        self.g = random.randint(120, 180)
+        self.b = random.randint(200, 235)
+        self.sains = self.pop
+        self.infectes = 0
+        self.morts = 0
+        self.rétablis = 0
+
 
     def show(self):
+        """ Affiche le pays
+        ---
+        """
         for point in self.border:
             pygame.draw.polygon(screen, (self.r, self.g, self.b), point)
             pygame.draw.lines(screen, WHITE, True, point, 1)
 
+
     def show_border(self):
+        """ Affiche le carré autour du pays
+        ---
+        """
         for rect in self.bound:
             pygame.draw.lines(screen, (255, 0, 0), True, [(rect[0], rect[1]),
                                                           (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3])], 1)
 
+
     def to_json(self):
+        """ Renvoie la classe sous forme Json
+        ---
+        """
         return {self.tag: {"NAME_FR": self.name, "POP_EST": self.pop, "GDP_MD_EST": self.pib, "geometry": self.border, "bounds": self.bound}}
 
 
 def from_json(data):
+    """ Charge un pays d'après un dictionnaire Json
+    ---
+    param :
+
+        - data (dict) le dictionnaire des pays
+
+    result :
+
+        - list(Pays()) liste des pays
+    """
     l_c = []
     for c in data:
         n = list(c.keys())[0]
@@ -131,11 +186,35 @@ def from_json(data):
         l_c.append(Pays(n, sc["NAME_FR"], sc["POP_EST"], sc["GDP_MD_EST"], sc["geometry"], sc["bounds"]))
     return l_c
 
-def to_json(l_c):
-    return [x.to_json() for x in l_c]
+
+def to_json(liste):
+    """ Exporte la liste de pays en liste de dictionnaire
+    ---
+    param :
+
+        - liste (list(Pays)) liste des pays
+
+    result :
+
+        - list(dist) liste des dictionnaires des pays
+    """
+    return [x.to_json() for x in liste]
 
 
 def format_text(text, font_size, width, height):
+    """ Met le texte en forme pour occuper tout l'espace disponnible
+    ---
+    param :
+
+        - text (str) le texte à afficher
+        - font_size (int) la taille maximale du texte
+        - width (int) la largeur maximale que peut occuper le texte
+        - height (int) la hauteur maximale que peut occuper le texte
+
+    result :
+
+        - list(str) le texte séparer sur plusieurs lignes pour améliorer l'affichage, pygame.font.SysFont la font qui maximise l'espace occupé
+    """
     n = text.split(" ")
     ok = False
     font = pygame.font.SysFont("montserrat", font_size)
@@ -156,8 +235,7 @@ def format_text(text, font_size, width, height):
                     ll += size
                 else:
                     m.append(l)
-                    l = [w]
-                    ll = size
+                    l, ll = [w], size
             m.append(l)
             h_v = 0
             if len(m) * font.size(m[0][0])[1] > height:
@@ -170,12 +248,81 @@ def format_text(text, font_size, width, height):
 
 
 def blit_text(surface, text, pos, font_size, w, h, color=FG):
+    """ Optimise l'affichage d'un texte sur un espace donné
+    ---
+    param :
+
+        - surface (pygame.Surface) la surface sur laquelle écrire
+        - text (str) le texte à afficher
+        - pos (tuple(x, y)) la position (t, l) d'origine de l'espace
+        - font_size (int) la taille maximale du texte
+        - w (int) la largeur de l'espace
+        - h (int) la hauteur de l'espace
+        - color ((r, g, b)) la couleur du texte
+    """
     l, t = pos
     text, font = format_text(text, font_size, w, h)
     for x in range(len(text)):
         wi, he = font.size(text[x])
         surface.blit(font.render(text[x], True, color), (l + (w - wi) // 2, t + x * he))
 
+
+def center_text(surface, font, text, color, w, h, t, l):
+    """ Centre le texte au milleu de l'espace donné
+    ---
+    param :
+
+        - surface (pygame.Surface) la surface sur laquelle écrire
+        - font (pygame.font.SysFont) la font avec laquelle écrire
+        - text (str) le texte à afficher
+        - color ((r, g, b)) la couleur du texte à afficher
+        - w (int) la largeur de l'espace
+        - h (int) la hauteur de l'espace
+        - t (int) la distance entre le haut de la fenêtre et le haut de l'espace
+        - l (int) la distance entre la gauche de la fenêtre et la gauche de l'espace
+    """
+    wi, he = font.size(text)
+    surface.blit(font.render(text, True, color), (l + (w - wi) // 2, t + (h - he) // 2))
+
+
+def create_mask(t, l, w, h, color):
+    """ Créer un masque pour réécrire du texte
+    ---
+    param :
+
+        - t (int) top
+        - l (int) left
+        - w (int) largeur
+        - h (int) hauteur
+        - color ((r, g, b)) la couleur du masque
+    """
+    country_name_mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    country_name_mask.fill(color)
+    screen.blit(country_name_mask, (l, t))
+
+
+def update(coutry):
+    """ Change les informations à l'écran et la couleur du pays donné
+    ---
+    param :
+
+        - country (Pays()) le pays doit les informations doivent être affichées
+    """
+    country.g += 20
+    country.b += 20
+    country.show()
+    create_mask(0, 1550, 400, 120, BG)
+    blit_text(screen, country.name, (1600, 30), 60, 300, 80)
+    create_mask(170, 1550, 400, 50, BG)
+    center_text(screen, data_font, str(country.pop), FG, 300, 50, 160, 1600)
+    create_mask(270, 1550, 400, 50, BG)
+    center_text(screen, data_font, str(country.sains), FG, 300, 50, 260, 1600)
+    create_mask(370, 1550, 400, 50, BG)
+    center_text(screen, data_font, str(country.infectes), FG, 300, 50, 360, 1600)
+    create_mask(470, 1550, 400, 50, BG)
+    center_text(screen, data_font, str(country.morts), FG, 300, 50, 460, 1600)
+    create_mask(570, 1550, 400, 50, BG)
+    center_text(screen, data_font, str(country.morts), FG, 300, 50, 560, 1600)
 
 
 data = json.load(open("Country.json"))
@@ -189,38 +336,25 @@ os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
 clock = pygame.time.Clock()
-pygame.display.set_caption('Name')
 
 screen.fill(BG)
-screen.blit(font.render("Simulation", True, FG), (40, 10))
+screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 5))
 
 country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
 country_name_mask.fill(BG)
 screen.blit(country_name_mask, (1550, 0))
 
-screen.blit(font.render("Population de départ", True, FG), (1600, 130))
-screen.blit(data_font.render("1056135", True, FG), (1670, 170))
-
-screen.blit(font.render("Sains", True, FG), (1680, 230))
-screen.blit(data_font.render("629962", True, FG), (1670, 270))
-
-screen.blit(font.render("Infectés", True, FG), (1670, 330))
-screen.blit(data_font.render("65156", True, FG), (1670, 370))
-
-screen.blit(font.render("Morts", True, FG), (1690, 430))
-screen.blit(data_font.render("616", True, FG), (1670, 470))
-
-screen.blit(font.render("Immunisés", True, FG), (1670, 530))
-screen.blit(data_font.render("3189", True, FG), (1670, 570))
+center_text(screen, font, "Population de départ", FG, 300, 50, 130, 1600)
+center_text(screen, font, "Sains", FG, 300, 50, 230, 1600)
+center_text(screen, font, "Infectés", FG, 300, 50, 330, 1600)
+center_text(screen, font, "Morts", FG, 300, 50, 430, 1600)
+center_text(screen, font, "Rétablis", FG, 300, 50, 530, 1600)
 
 screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
-
 screen.blit(font.render("Evolution locale", True, FG), (1200, 650))
-
 
 for c in l_c:
     c.show()
-
 
 c_name = [x.name for x in l_c]
 
@@ -241,23 +375,25 @@ while True:
                 for cb in c.bound:
                     if in_rect(cb, x, y):
                         for b in c.border:
-                            if in_poly((x, y), b, (x + 1000, y + 1000)):
+                            if in_poly((x, y), b, (x + 1000, y + 1000)) and not changed:
                                 if c != country:
+                                    if country is not None:
+                                        country.g -= 20
+                                        country.b -= 20
+                                        country.show()
                                     country = c
                                     changed = True
                                 break
+
+
     if changed:
         changed = False
-        country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
-        country_name_mask.fill(BG)
-        screen.blit(country_name_mask, (1550, 0))
-        blit_text(screen, country.name, (1600, 50), 60, 300, 80)
-        
+        update(country)
+
 
     pygame.display.update()
 
 # TODO:
 #       graphique
-#       chgt couleur quand séléctionné (+ border ?)
 #       chgt couleur hover ?
-#        
+#       Zoom

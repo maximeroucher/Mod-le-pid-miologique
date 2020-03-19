@@ -135,26 +135,5 @@ class SIRM:
         return f"Population de {self.N} personnes.\nRésultat :{a}"
 
 
-text = "15/15 cours de math"
 
-def check(t):
-    return all([x.isdigit() or x == "/" for x in t])
-
-t = "cours"
-print(check(t))
-
-def split_text(text):
-    x = []
-    a = ""
-    part = text.split(' ')
-    for p in part:
-        print(p)
-        if check(p):
-            x.append(p)
-        else:
-            a += p + " "
-    x.append(a.strip())
-    return x
-
-print(split_text(text))
 
