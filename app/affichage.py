@@ -18,7 +18,6 @@ from matplotlib.patches import Polygon
 from shapely.geometry import LineString
 
 
-
 FPS = 60
 LEFT = 1
 BLACK = (0, 0, 0)
@@ -26,6 +25,7 @@ WHITE = (255, 255, 255)
 BG = (32, 34, 37)
 FG = (182, 185, 190)
 SCALE = 4.2
+
 
 def format_data():
     """ Ouvre le fichier des données mondiales et en récupère les données utiles à la simulation
@@ -57,7 +57,6 @@ def format_data():
     json.dump(l, open("Country.json", "w"))
 
 
-
 def create_map():
     """ Créer une carte du monde avec matplotlib
     ---
@@ -71,7 +70,6 @@ def create_map():
         r = random.randint(0, 70) / 255
         plt.fill(pts_x, pts_y, facecolor=(r, g, b), edgecolor=(1, 1, 1), linewidth=1)
     plt.show()
-
 
 
 def afficher_sim(data):
@@ -308,9 +306,6 @@ def update(coutry):
 
         - country (Pays()) le pays doit les informations doivent être affichées
     """
-    country.g += 20
-    country.b += 20
-    country.show()
     create_mask(0, 1550, 400, 120, BG)
     blit_text(screen, country.name, (1600, 30), 60, 300, 80)
     create_mask(170, 1550, 400, 50, BG)
@@ -323,6 +318,46 @@ def update(coutry):
     center_text(screen, data_font, str(country.morts), FG, 300, 50, 460, 1600)
     create_mask(570, 1550, 400, 50, BG)
     center_text(screen, data_font, str(country.morts), FG, 300, 50, 560, 1600)
+    create_mask(30, 10, 1540, 620, BG)
+    border = get_scale(country, 1600, 500, 50, 20)
+    for c in border:
+        pygame.draw.polygon(screen, (coutry.r, coutry.g, coutry.b), c)
+        pygame.draw.lines(screen, WHITE, True, c, 1)
+
+
+def get_scale(country, w, h, t, l): # TODO: rassembler les îles pour zommer encore +
+    """ Calcule la redimension des bords du pays afin de le zoomer
+    ---
+    param :
+
+        - country (Pays) le pays à redimensionner
+        - w (int) la largeur maximale
+        - h (int) la hauteur maximale
+        - t (int) la distance au haut de l'écran
+        - l (int) la distance à gauche de l'écran
+
+    result :
+
+        - list(list(tuple)) liste des frontières des parties du pays redimensionné
+    """
+    min_l = min([x[0] for x in country.bound])
+    min_t = min([x[3] for x in country.bound])
+    max_r = max([x[2] for x in country.bound])
+    max_b = max([x[1] for x in country.bound])
+    h_c = max_b - min_t
+    w_c = max_r - min_l
+    dx = w / w_c
+    dy = h / h_c
+    scale = min(dx, dy)
+    esp_x = (w - (w_c * scale)) // 2
+    esp_y = (h - (h_c * scale)) // 2
+    border = []
+    for c in country.border:
+        f = []
+        for b in c:
+            f.append([(b[0] - min_l) * scale + l + esp_x, (b[1] - min_t) * scale + t + esp_y])
+        border.append(f)
+    return border
 
 
 data = json.load(open("Country.json"))
@@ -340,10 +375,6 @@ clock = pygame.time.Clock()
 screen.fill(BG)
 screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 5))
 
-country_name_mask = pygame.Surface((500, 800), pygame.SRCALPHA)
-country_name_mask.fill(BG)
-screen.blit(country_name_mask, (1550, 0))
-
 center_text(screen, font, "Population de départ", FG, 300, 50, 130, 1600)
 center_text(screen, font, "Sains", FG, 300, 50, 230, 1600)
 center_text(screen, font, "Infectés", FG, 300, 50, 330, 1600)
@@ -351,39 +382,41 @@ center_text(screen, font, "Morts", FG, 300, 50, 430, 1600)
 center_text(screen, font, "Rétablis", FG, 300, 50, 530, 1600)
 
 screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
-screen.blit(font.render("Evolution locale", True, FG), (1200, 650))
+create_mask(700, 150, 700, 350, FG)
+screen.blit(font.render("Evolution locale", True, FG), (1350, 650))
+create_mask(700, 1100, 700, 350, FG)
 
 for c in l_c:
     c.show()
 
 c_name = [x.name for x in l_c]
-
 c_bound = [x.bound for x in l_c]
 
 country = None
 changed = False
+zoomed = False
 
 while True:
     clock.tick(FPS)
 
     for event in pygame.event.get():
+
         if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and pygame.K_ESCAPE:
             quit()
+
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
             x, y = pygame.mouse.get_pos()
-            for c in l_c:
-                for cb in c.bound:
-                    if in_rect(cb, x, y):
-                        for b in c.border:
-                            if in_poly((x, y), b, (x + 1000, y + 1000)) and not changed:
-                                if c != country:
-                                    if country is not None:
-                                        country.g -= 20
-                                        country.b -= 20
-                                        country.show()
-                                    country = c
+            if not zoomed:
+                for c in l_c:
+                    for cb in c.bound:
+                        if in_rect(cb, x, y):
+                            for b in c.border:
+                                if in_poly((x, y), b, (x + 1000, y + 1000)) and not changed:
+                                    if c != country:
+                                        country = c
                                     changed = True
-                                break
+                                    zoomed = True
+                                    break
 
 
     if changed:
@@ -396,4 +429,4 @@ while True:
 # TODO:
 #       graphique
 #       chgt couleur hover ?
-#       Zoom
+#       Zoom (flèche retour)

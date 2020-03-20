@@ -134,6 +134,3 @@ class SIRM:
         a = "\n- " + "\n- ".join([f"{x} : {int(d[x][-1] * self.N)}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :{a}"
 
-
-
-
