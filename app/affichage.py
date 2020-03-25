@@ -1,21 +1,25 @@
 import json
 import os
+import time
 import random
 import tkinter as tk
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
+from threading import Thread
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
+os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
 import pygame
 import shapefile
 import tqdm
 from dbfread import DBF, read
-from matplotlib.patches import Polygon
-from shapely.geometry import LineString
+from shapely.geometry import Polygon, Point
+
+from sim import SIR, SIRM
 
 
 FPS = 60
@@ -24,7 +28,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 BG = (32, 34, 37)
 FG = (182, 185, 190)
-SCALE = 4.2
+BTN_BOUND = [40, 610, 110, 540]
 
 
 def format_data():
@@ -91,25 +95,22 @@ def in_rect(points, x, y):
     ---
     param :
 
-        - points (list) liste des points (l, r, t, l)
+        - points (list) liste des points (b, r, t, l)
         - x (int) position x de la souris
         - y (int) position y de la souris
     """
     return points[0] <= x and points[3] <= y and points[1] >= y and points[2] >= x
 
 
-def in_poly(point, polyPoints, farAwayPoint):
+def in_poly(point, polyPoints):
     """ Vérifie si un point est dans un polygone
     ---
     param :
 
         - point (tuple(x, y)) point à verifier
         - polypoint (list(tuple)) liste des points d'un polygone
-        - farAwayPoint (tuple(x, y)) point à très longue distance
     """
-    line1 = LineString(polyPoints)
-    line2 = LineString([point, farAwayPoint])
-    return line1.intersection(line2)
+    return Polygon(polyPoints).contains(Point(point))
 
 
 class Pays():
@@ -138,7 +139,7 @@ class Pays():
         self.sains = self.pop
         self.infectes = 0
         self.morts = 0
-        self.rétablis = 0
+        self.retablis = 0
 
 
     def show(self):
@@ -166,6 +167,170 @@ class Pays():
         return {self.tag: {"NAME_FR": self.name, "POP_EST": self.pop, "GDP_MD_EST": self.pib, "geometry": self.border, "bounds": self.bound}}
 
 
+class World():
+
+    def __init__(self, countries):
+        """ Initialisation du monde
+        ---
+        param :
+
+            - countries (list(Pays)) la liste des pays du monde
+        """
+        self.countries = countries
+        self.pop = sum([c.pop for c in self.countries])
+        self.sains = self.pop
+        self.infectes = 0
+        self.morts = 0
+        self.retablis = 0
+
+
+    def update(self):
+        """ Met à jour les informations mondiales
+        ---
+        """
+        self.sains = sum([c.sains for c in self.countries])
+        self.infectes = sum([c.infectes for c in self.countries])
+        self.morts = sum([c.morts for c in self.countries])
+        self.rétablis = sum([c.rétablis for c in self.countries])
+
+
+class Graphique(Thread):
+
+    def __init__(self, screen, models, t, l):
+        """ Initialisation d'un graphique
+        ---
+        param :
+
+            - screen (pygame.Surface) la surface sur laquelle écrire
+            - model (modèle compartimentale) le modèle dont le graphique doit afficher l'évolution
+        """
+        Thread.__init__(self)
+        self.models = models
+        for models in self.models:
+            # Vérifie les attributs nécessaires u modèle
+            assert hasattr(model, 'update')
+            assert hasattr(model, 'param_dict')
+            assert hasattr(model, 'nb_iterations')
+            assert hasattr(model, 'N')
+        self.screen = screen
+        self.daemon = True
+        self.data = [[[] for _ in range(len(model.param_dict))] for model in self.models]
+        self.color_data = [[model.param_dict[x]["color"] for x in model.param_dict] for model in self.models]
+        self.y = [0]
+        self.nb_iterations = [model.nb_iterations for model in self.models]
+        self.SLEEP_TIME = .1
+        self.num_model = 0
+        self.model = self.models[self.num_model]
+        self.WIDTH = 700
+        self.HEIGHT = 350
+        self.MARGIN = 30
+        self.HAUT = self.HEIGHT - self.MARGIN
+        self.DHAUT = self.HAUT + 5
+        self.W = self.WIDTH - 2 * self.MARGIN
+        self.H = self.HEIGHT - 2 * self.MARGIN
+        self.top = t
+        self.left = l
+
+
+    def gen_data(self):
+        """ Fait avancer la simulation d'un jour
+        ---
+        """
+        for n in range(len(self.models)):
+            self.models[n].update()
+            self.model = self.models[n]
+            key = list(self.model.param_dict.keys())
+            for x in range(len(self.data[n])):
+                self.data[n][x].append(self.model.param_dict[key[x]]["value"] * self.model.N)
+
+
+    def change_countries(self, n):
+        """ Change le graphique du pays donnés
+        ---
+        param :
+
+            - n (int) le numéro du pays donné
+        """
+        assert n <= len(self.models)
+        self.num_model = n
+        self.model = self.models[self.num_model]
+        self.display_country()
+
+
+    def get_scale_value(self, m, M, nb_pt):
+        """ Créer une échelle de valeur
+        ---
+        param :
+
+            - m (int) la valeur minimale de l'échelle
+            - M (int) la valeur maximale de l'échelle
+            - nb_pt (int) le nombre de point de l'échelle
+        """
+        if M - m < nb_pt:
+            return [m + x for x in range(M - m + 1)]
+        delta = (M - m) / nb_pt
+        return [x * delta + m for x in range(nb_pt + 1)]
+
+
+
+    def display_country(self):
+        """ Affiche le graphique du pays donné
+        ---
+        """
+        mx = max([max(x) for x in self.data[self.num_model]])
+        my = self.y[-1]
+
+        dx = self.H / mx
+        dy = self.W / my
+
+        create_mask(self.top, self.left - 10, self.WIDTH + 20, self.HEIGHT, BG)
+
+        for n in range(len(self.data[self.num_model])):
+            c_x = [(mx - x) * dx + self.MARGIN + self.top for x in self.data[self.num_model][n]]
+            c_y = [x * dy + self.MARGIN + self.left for x in self.y]
+            pts = list(zip(c_y, c_x))
+            for x in range(len(pts) - 1):
+                pygame.draw.line(self.screen, self.color_data[self.num_model][n], pts[x], pts[x + 1], 2)
+
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.left, self.MARGIN - 10 + self.top),
+                         (self.MARGIN + self.left, self.HAUT + self.top), 2)
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.left, self.HAUT + self.top),
+                         (self.WIDTH - self.MARGIN + 10 + self.left, self.HAUT+ self.top), 2)
+
+        y_coord = self.get_scale_value(0, my, 10)
+        for y in y_coord:
+            X = self.MARGIN + int(y * dy)
+            pygame.draw.line(self.screen, FG, (self.left + X, self.HAUT + self.top),
+                             (self.left + X, self.DHAUT + self.top), 2)
+            self.screen.blit(data_font.render(str(round(y, 2)), True, FG), (self.left + X - 2, self.DHAUT + self.top))
+
+        x_coord = self.get_scale_value(0, model.N, 10)
+        for x in x_coord:
+            form = str(int(x))
+            w = data_font.size(form)[0]
+            Y = self.HAUT - int(x * dx)
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.left, Y + self.top),
+                             (self.MARGIN - 5 + self.left, Y + self.top), 2)
+            self.screen.blit(
+                data_font.render(form, True, FG),
+                ((self.MARGIN - w) / 2 + self.left - 10, Y - 10 + self.top))
+
+        time.sleep(self.SLEEP_TIME)
+        pygame.display.update()
+
+
+    def run(self):
+        """ Lance la simulation et l'affichage du graphique
+        ---
+        """
+        self.gen_data()
+        for _ in range(self.nb_iterations[self.num_model]):
+            self.y.append(len(self.y))
+            self.gen_data()
+            if len(self.data[self.num_model][0]) >= 2:
+                self.display_country()
+
+
 def from_json(data):
     """ Charge un pays d'après un dictionnaire Json
     ---
@@ -175,7 +340,7 @@ def from_json(data):
 
     result :
 
-        - list(Pays()) liste des pays
+        - list(Pays) liste des pays
     """
     l_c = []
     for c in data:
@@ -299,30 +464,51 @@ def create_mask(t, l, w, h, color):
     screen.blit(country_name_mask, (l, t))
 
 
+def update_mask():
+    """ Met des masques sur les textes qui doivent être changés
+    ---
+    """
+    create_mask(0, 1550, 400, 120, BG)
+    create_mask(170, 1550, 400, 50, BG)
+    create_mask(270, 1550, 400, 50, BG)
+    create_mask(370, 1550, 400, 50, BG)
+    create_mask(470, 1550, 400, 50, BG)
+    create_mask(570, 1550, 400, 50, BG)
+
+
 def update(coutry):
     """ Change les informations à l'écran et la couleur du pays donné
     ---
     param :
 
-        - country (Pays()) le pays doit les informations doivent être affichées
+        - country (Pays) le pays doit les informations doivent être affichées
     """
-    create_mask(0, 1550, 400, 120, BG)
+    update_mask()
     blit_text(screen, country.name, (1600, 30), 60, 300, 80)
-    create_mask(170, 1550, 400, 50, BG)
     center_text(screen, data_font, str(country.pop), FG, 300, 50, 160, 1600)
-    create_mask(270, 1550, 400, 50, BG)
     center_text(screen, data_font, str(country.sains), FG, 300, 50, 260, 1600)
-    create_mask(370, 1550, 400, 50, BG)
     center_text(screen, data_font, str(country.infectes), FG, 300, 50, 360, 1600)
-    create_mask(470, 1550, 400, 50, BG)
     center_text(screen, data_font, str(country.morts), FG, 300, 50, 460, 1600)
-    create_mask(570, 1550, 400, 50, BG)
-    center_text(screen, data_font, str(country.morts), FG, 300, 50, 560, 1600)
+    center_text(screen, data_font, str(country.retablis), FG, 300, 50, 560, 1600)
     create_mask(30, 10, 1540, 620, BG)
-    border = get_scale(country, 1600, 500, 50, 20)
+    border = get_scale(country, 1500, 500, 50, 20)
     for c in border:
         pygame.draw.polygon(screen, (coutry.r, coutry.g, coutry.b), c)
         pygame.draw.lines(screen, WHITE, True, c, 1)
+    pygame.draw.rect(screen, FG, (40, 540, 70, 70), 1)
+    screen.blit(back_arrow, (50, 550))
+
+
+def update_world(world):
+    """ Met à jour les informations mondiales
+    """
+    update_mask()
+    blit_text(screen, "Monde", (1600, 30), 60, 300, 80)
+    center_text(screen, data_font, str(world.pop), FG, 300, 50, 160, 1600)
+    center_text(screen, data_font, str(world.sains), FG, 300, 50, 260, 1600)
+    center_text(screen, data_font, str(world.infectes), FG, 300, 50, 360, 1600)
+    center_text(screen, data_font, str(world.morts), FG, 300, 50, 460, 1600)
+    center_text(screen, data_font, str(world.retablis), FG, 300, 50, 560, 1600)
 
 
 def get_scale(country, w, h, t, l): # TODO: rassembler les îles pour zommer encore +
@@ -346,9 +532,7 @@ def get_scale(country, w, h, t, l): # TODO: rassembler les îles pour zommer enc
     max_b = max([x[1] for x in country.bound])
     h_c = max_b - min_t
     w_c = max_r - min_l
-    dx = w / w_c
-    dy = h / h_c
-    scale = min(dx, dy)
+    scale = min(w / w_c, h / h_c)
     esp_x = (w - (w_c * scale)) // 2
     esp_y = (h - (h_c * scale)) // 2
     border = []
@@ -362,19 +546,23 @@ def get_scale(country, w, h, t, l): # TODO: rassembler les îles pour zommer enc
 
 data = json.load(open("Country.json"))
 l_c = from_json(data)
+world = World(l_c)
 
 pygame.init()
+back_arrow = pygame.image.load("left-arrow.png")
+back_arrow = pygame.transform.scale(back_arrow, (50, 50))
 font = pygame.font.SysFont("montserrat", 24)
 title_font = pygame.font.SysFont("montserrat", 44)
 data_font = pygame.font.SysFont("montserrat", 18)
-os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
+screen = pygame.display.get_surface()
 clock = pygame.time.Clock()
 
 screen.fill(BG)
-screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 5))
 
+screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 5))
+update_world(world)
 center_text(screen, font, "Population de départ", FG, 300, 50, 130, 1600)
 center_text(screen, font, "Sains", FG, 300, 50, 230, 1600)
 center_text(screen, font, "Infectés", FG, 300, 50, 330, 1600)
@@ -382,41 +570,68 @@ center_text(screen, font, "Morts", FG, 300, 50, 430, 1600)
 center_text(screen, font, "Rétablis", FG, 300, 50, 530, 1600)
 
 screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
-create_mask(700, 150, 700, 350, FG)
 screen.blit(font.render("Evolution locale", True, FG), (1350, 650))
-create_mask(700, 1100, 700, 350, FG)
 
-for c in l_c:
+for c in world.countries:
     c.show()
 
-c_name = [x.name for x in l_c]
-c_bound = [x.bound for x in l_c]
+model = SIRM(100, 1, 0.6, 12, 0.1, 50)
+model2 = SIR(100, 1, 0.6, 12, 50)
+model3 = SIRM(100, 1, 0.6, 5, 0.2, 50)
+
+models = [model, model2, model3]
+
+graph_worlds = Graphique(screen, [model], 700, 150)
+graph_coutries = Graphique(screen, models, 700, 1100)
+graph_coutries.start()
+graph_worlds.start()
+
+
+c_name = [x.name for x in world.countries]
+c_bound = [x.bound for x in world.countries]
 
 country = None
 changed = False
 zoomed = False
+on_world = True
+
 
 while True:
     clock.tick(FPS)
 
     for event in pygame.event.get():
 
-        if event.type == pygame.QUIT or event.type == pygame.KEYDOWN and pygame.K_ESCAPE:
+        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             quit()
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
             x, y = pygame.mouse.get_pos()
             if not zoomed:
-                for c in l_c:
-                    for cb in c.bound:
-                        if in_rect(cb, x, y):
-                            for b in c.border:
-                                if in_poly((x, y), b, (x + 1000, y + 1000)) and not changed:
-                                    if c != country:
-                                        country = c
-                                    changed = True
-                                    zoomed = True
-                                    break
+                if in_rect((40, 650, 1550, 0), x, y):
+                    for c in l_c:
+                        for cb in c.bound:
+                            if in_rect(cb, x, y):
+                                for b in c.border:
+                                    if in_poly((x, y), b):
+                                        if c != country:
+                                            country = c
+                                        changed = True
+                                        zoomed = True
+                                        on_world = False
+                                        break
+
+                    else:
+                        if not on_world:
+                            update_world(world)
+                            on_world = True
+
+            else:
+                if in_rect(BTN_BOUND, x, y):
+                    zoomed = False
+                    create_mask(30, 10, 1540, 620, BG)
+                    on_world = False
+                    for c in world.countries:
+                        c.show()
 
 
     if changed:
@@ -429,4 +644,3 @@ while True:
 # TODO:
 #       graphique
 #       chgt couleur hover ?
-#       Zoom (flèche retour)

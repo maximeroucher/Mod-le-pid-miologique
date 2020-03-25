@@ -1,4 +1,9 @@
 #from affichage import afficher_sim
+import os
+
+# Mute l'import de pygame
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
+import pygame
 
 
 class SIR:
@@ -25,6 +30,13 @@ class SIR:
         self.i = []
         self.r = []
         self.s = []
+        self.param_dict = {"S":
+                           {"value": self.S, "color": (237, 203, 81)},
+                           "I":
+                           {"value": self.I, "color": (198, 96, 55)},
+                           "R":
+                           {"value": self.R, "color": (77, 94, 118)}
+                            }
 
 
     def update(self):
@@ -37,6 +49,9 @@ class SIR:
         self.S += dS
         self.I += dI
         self.R += dR
+        self.param_dict["S"]["value"] = self.S
+        self.param_dict["I"]["value"] = self.I
+        self.param_dict["R"]["value"] = self.R
 
 
     def simuler(self):
@@ -55,7 +70,7 @@ class SIR:
     def format_sim(self):
         """ Formmatte les données de la simulation pour l'affichage
         """
-        return {'Sains': self.s, "Infectés": self.i, "Morts / Guéris": self.r}
+        return {'Sains': self.S, "Infectés": self.I, "Morts / Guéris": self.R}
 
 
     def __str__(self):
@@ -92,6 +107,15 @@ class SIRM:
         self.r = []
         self.s = []
         self.m = []
+        self.param_dict = {"S":
+                           {"value": self.S, "color": (237, 203, 81)},
+                           "I":
+                           {"value": self.I, "color": (198, 96, 55)},
+                           "R":
+                           {"value": self.R, "color": (77, 94, 118)},
+                           "M":
+                           {"value": self.M, "color": (10, 100, 203)}
+                            }
 
 
     def update(self):
@@ -106,6 +130,10 @@ class SIRM:
         self.I += dI
         self.R += dR
         self.M += dM
+        self.param_dict["S"]["value"] = self.S
+        self.param_dict["I"]["value"] = self.I
+        self.param_dict["R"]["value"] = self.R
+        self.param_dict["M"]["value"] = self.M
 
 
     def simuler(self):
@@ -126,11 +154,10 @@ class SIRM:
     def format_sim(self):
         """ Formmatte les données de la simulation pour l'affichage
         """
-        return {'Sains': self.s, "Infectés": self.i, "Réscapés": self.r, "Morts": self.m}
+        return {'Sains': self.S, "Infectés": self.I, "Réscapés": self.R, "Morts": self.M}
 
 
     def __str__(self):
         d = self.format_sim()
-        a = "\n- " + "\n- ".join([f"{x} : {int(d[x][-1] * self.N)}" for x in list(d.keys())])
+        a = "\n- " + "\n- ".join([f"{x} : {int(d[x] * self.N)}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :{a}"
-
