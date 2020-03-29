@@ -8,7 +8,7 @@ import pygame
 
 class SIR:
 
-    def __init__(self, N, N0, trans, tp, nb_iterations):
+    def __init__(self, country, N0, trans, tp, nb_iterations):
         """ Simulation selon le modèle S / I / R
         ---
         param :
@@ -19,22 +19,20 @@ class SIR:
             - tp (int) le nombre de jour de maladie une fois infecté
             - nb_iterations (int) le nombre de jour de la simulation
         """
-        self.N = N
-        self.S = (N - N0) / N
-        self.I = N0 / N
+        self.country = country
+        self.N = self.country.pop
+        self.S = (self.N - N0) / self.N
+        self.I = N0 / self.N
         self.R = 0
         self.transmission = trans
         self.temps_maladie = tp
         self.nb_iterations = nb_iterations
         self.pct_malade = 1 / self.temps_maladie
-        self.i = []
-        self.r = []
-        self.s = []
-        self.param_dict = {"S":
+        self.param_dict = {"Sains":
                            {"value": self.S, "color": (237, 203, 81)},
-                           "I":
+                           "Infectés":
                            {"value": self.I, "color": (198, 96, 55)},
-                           "R":
+                           "Rétablis":
                            {"value": self.R, "color": (77, 94, 118)}
                             }
 
@@ -49,22 +47,9 @@ class SIR:
         self.S += dS
         self.I += dI
         self.R += dR
-        self.param_dict["S"]["value"] = self.S
-        self.param_dict["I"]["value"] = self.I
-        self.param_dict["R"]["value"] = self.R
-
-
-    def simuler(self):
-        """ Lance la simulation complète
-        """
-        self.s.append(self.S)
-        self.i.append(self.I)
-        self.r.append(self.R)
-        for x in range(self.nb_iterations):
-            self.update()
-            self.s.append(self.S)
-            self.i.append(self.I)
-            self.r.append(self.R)
+        self.param_dict["Sains"]["value"] = self.S
+        self.param_dict["Infectés"]["value"] = self.I
+        self.param_dict["Rétablis"]["value"] = self.R
 
 
     def format_sim(self):
@@ -81,7 +66,7 @@ class SIR:
 
 class SIRM:
 
-    def __init__(self, N, N0, transm, tp, l, nb_iterations):
+    def __init__(self, country, N0, transm, tp, l, nb_iterations):
         """ Simulation selon le modèle S / I / R avec l'ajout de la léthalité de la maladie
         ---
         param :
@@ -93,9 +78,10 @@ class SIRM:
             - l (float, 0 <= l <= 1) la léthalité de la maladie
             - nb_iterations (int) le nombre de jour de la simulation
         """
-        self.N = N
-        self.S = (N - N0) / N
-        self.I = N0 / N
+        self.country = country
+        self.N = self.country.pop
+        self.S = (self.N - N0) / self.N
+        self.I = N0 / self.N
         self.R = 0
         self.M = 0
         self.transmission = transm
@@ -103,17 +89,13 @@ class SIRM:
         self.temps_maladie = tp
         self.nb_iterations = nb_iterations
         self.pct_malade = 1 / self.temps_maladie
-        self.i = []
-        self.r = []
-        self.s = []
-        self.m = []
-        self.param_dict = {"S":
+        self.param_dict = {"Sains":
                            {"value": self.S, "color": (237, 203, 81)},
-                           "I":
+                           "Infectés":
                            {"value": self.I, "color": (198, 96, 55)},
-                           "R":
+                           "Rétablis":
                            {"value": self.R, "color": (77, 94, 118)},
-                           "M":
+                           "Morts":
                            {"value": self.M, "color": (10, 100, 203)}
                             }
 
@@ -130,25 +112,10 @@ class SIRM:
         self.I += dI
         self.R += dR
         self.M += dM
-        self.param_dict["S"]["value"] = self.S
-        self.param_dict["I"]["value"] = self.I
-        self.param_dict["R"]["value"] = self.R
-        self.param_dict["M"]["value"] = self.M
-
-
-    def simuler(self):
-        """ Lance la simulation complète
-        """
-        self.s.append(self.S)
-        self.i.append(self.I)
-        self.r.append(self.R)
-        self.m.append(self.M)
-        for x in range(self.nb_iterations):
-            self.update()
-            self.s.append(self.S)
-            self.i.append(self.I)
-            self.r.append(self.R)
-            self.m.append(self.M)
+        self.param_dict["Sains"]["value"] = self.S
+        self.param_dict["Infectés"]["value"] = self.I
+        self.param_dict["Rétablis"]["value"] = self.R
+        self.param_dict["Morts"]["value"] = self.M
 
 
     def format_sim(self):
