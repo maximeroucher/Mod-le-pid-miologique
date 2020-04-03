@@ -1,4 +1,3 @@
-#from affichage import afficher_sim
 import os
 
 # Mute l'import de pygame
@@ -9,7 +8,7 @@ import pygame
 class SIR:
 
     def __init__(self, country, N0, trans, tp, nb_iterations):
-        """ Simulation selon le modèle S / I / R
+        """ Simulation selon le modèle SIR
         ---
         param :
 
@@ -67,7 +66,7 @@ class SIR:
 class SIRM:
 
     def __init__(self, country, N0, transm, tp, l, nb_iterations):
-        """ Simulation selon le modèle S / I / R avec l'ajout de la léthalité de la maladie
+        """ Simulation selon le modèle SIR avec l'ajout de la léthalité de la maladie
         ---
         param :
 
@@ -96,8 +95,10 @@ class SIRM:
                            "Rétablis":
                            {"value": self.R, "color": (77, 94, 118)},
                            "Morts":
-                           {"value": self.M, "color": (10, 100, 203)}
-                            }
+                           {"value": self.M, "color": (10, 100, 203)},
+                           "Population totale":
+                           {"value": 1, "color": (128, 179, 64)}
+                          }
 
 
     def update(self):
@@ -105,17 +106,19 @@ class SIRM:
         ---
         """
         dS = -self.transmission * self.I * self.S
-        dI = (self.transmission * self.S - self.pct_malade) * self.I
-        dR = self.pct_malade * self.I * (1 - self.lethalite)
-        dM = self.pct_malade * self.I * self.lethalite
+        dI = (self.transmission * self.S - self.pct_malade - self.lethalite) * self.I
+        dR = self.pct_malade * self.I
+        dM = self.lethalite * self.I
         self.S += dS
         self.I += dI
         self.R += dR
         self.M += dM
+        n = self.S + self.I + self.R
         self.param_dict["Sains"]["value"] = self.S
         self.param_dict["Infectés"]["value"] = self.I
         self.param_dict["Rétablis"]["value"] = self.R
         self.param_dict["Morts"]["value"] = self.M
+        self.param_dict["Population totale"]["value"] = n
 
 
     def format_sim(self):
@@ -128,3 +131,113 @@ class SIRM:
         d = self.format_sim()
         a = "\n- " + "\n- ".join([f"{x} : {int(d[x] * self.N)}" for x in list(d.keys())])
         return f"Population de {self.N} personnes.\nRésultat :{a}"
+
+
+
+class Compartiment:
+
+    def __init__(self, N, nom, color):
+        """ Initialisation d'un compartiment
+        ---
+        param :
+
+            - N (float 0 <= N <= 1) le pourcentage de la population dans ce compartiment
+            - nom (str) le nom du compartiment
+            - color ((r, g, b)) la couleur de la courbe de l'évolution dans le graphique
+        """
+        self.N = N
+        self.nom = nom
+        self.color = color
+
+
+    def get_d(self, coef, include_itself, other_comp=None):
+        """ Calcule le pourcentage de personne qui sont passé de ce compartiment au compartiment donné en 1 jour
+        ---
+        param :
+
+            - coef (float 0 <= coef <= 1) le coef de transfert entre les deux compartiments
+            - include_itself (bool) indique si le nombre de personne de ce compartiment doit faire partie du calcule
+            - other_comp (None / Compartiment) le compartiment d'arrivé, si il est donné sa valeur intervient dans la calcul
+        """
+        c = 1 if other_comp is None else other_comp.N
+        d = 1 if not include_itself else self.N
+        return coef * c * d
+
+
+    def give(self, d):
+        """ Ajoute tout le pourcentage donné
+        """
+        self.N += d
+
+
+class ModeleCompartimental:
+
+    def __init__(self, comp_list):
+        """ Initialisation d'un model compartimental
+        ---
+        param :
+
+            - comp_list (list(Compartiment))
+        """
+        self.param_dict = {comp.nom : {"value": comp.N, "color": comp.color} for comp in self.comp_dict}
+
+
+class Event:
+
+    def __init__(self):
+        """ Initialisation de la classe Event, évènement ponctuel qui ont un effet sur l'évolution de l'éipidémie
+        """
+
+
+# Couleur de fond
+BG = (32, 34, 37)
+# Couleur du texte, des axes des graphiques et des bords des pays
+FG = (182, 185, 190)
+
+
+def in_rect(points, x, y):
+    return points[0] <= x and points[1] >= y and points[2] >= x and points[3] <= y
+
+
+def create_mask(t, l, w, h, color=BG):
+    country_name_mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    country_name_mask.fill(color)
+    screen.blit(country_name_mask, (l, t))
+
+
+def center_text(surface, font, text, color, w, h, t, l):
+    wi, he = font.size(text)
+    surface.blit(font.render(text, True, color), (l + (w - wi) // 2, t + (h - he) // 2))
+
+""" 
+
+
+HAUTEUR = 400
+LARGEUR = 500
+TOP = 50
+LEFT = 50
+WIDTH = 350
+HEIGHT = 200
+
+pygame.init()
+font = pygame.font.SysFont("montserrat", 24)
+screen = pygame.display.set_mode((LARGEUR, HAUTEUR))
+screen.fill(BG)
+pygame.draw.rect(screen, (125, 125, 125), (LEFT, TOP, WIDTH, HEIGHT))
+
+pygame.display.update()
+
+while True:
+
+    for event in pygame.event.get():
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == pygame.QUIT:
+            quit()
+
+        x, y = pygame.mouse.get_pos()
+        if in_rect((TOP, LEFT + WIDTH, TOP + HEIGHT, LEFT), y, x):
+            create_mask(HAUTEUR - 50, LARGEUR - 500, 500, 50, BG)
+            center_text(screen, font, f"x : {(x - LEFT) * 700 / WIDTH}, y : {650 - (y - TOP) * 650 / HEIGHT}", FG, 500, 50, HAUTEUR - 50, LARGEUR - 500)
+
+    pygame.display.update()
+ """

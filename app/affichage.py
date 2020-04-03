@@ -11,22 +11,31 @@ os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import numpy as np
 import pygame
 import shapefile
-import tqdm
 from dbfread import DBF, read
 from shapely.geometry import Point, Polygon
 
 from sim import SIR, SIRM
 
 
+# Le nombre d'images par seconde
 FPS = 60
+
+# Code du clic gauche de la souris
 LEFT = 1
+
+
+# Couleur de l'application
+
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+# Couleur de fond
 BG = (32, 34, 37)
+# Couleur du texte, des axes des graphiques et des bords des pays
 FG = (182, 185, 190)
+
+# Coordonnées du carré du bouton (l, b, r, t)
 BTN_BOUND = [40, 610, 110, 540]
 
 
@@ -269,10 +278,10 @@ def update_mask(n):
 
         - n (int) le nombre de masque a créer
     """
-    w = 300 / (n - 1)
+    w = 330 / (n - 1)
     create_mask(170, 1550, 400, 50, BG)
     for x in range(n):
-        create_mask(270 + w * x, 1550, 400, 50, BG)
+        create_mask(250 + w * x, 1550, 400, 50, BG)
 
 
 # Redimensionnement
@@ -313,7 +322,7 @@ def get_scale(country, w, h, t, l):  # TODO: rassembler les îles pour zommer en
 
 ### Classes
 
-class Pays():
+class Pays:
 
     def __init__(self, tag, name, pop, pib, border, bound):
         """ Initialisation d'un pays
@@ -344,7 +353,7 @@ class Pays():
         """
         for point in self.border:
             pygame.draw.polygon(screen, (self.r, self.g, self.b), point)
-            pygame.draw.lines(screen, WHITE, True, point, 1)
+            pygame.draw.lines(screen, FG, True, point, 1)
 
 
     def show_border(self):
@@ -415,11 +424,11 @@ class Graphique(Thread):
         ## Constantes
 
         # Temps d'une journée de simulation
-        self.SLEEP_TIME = .1
+        self.SLEEP_TIME = .01
         # Largeur de la fenêtre
         self.WIDTH = 700
         # Hauteur de la fenêtre
-        self.HEIGHT = 370
+        self.HEIGHT = 390
         # Marge entre les bords de la fenêtre et le graphique
         self.MARGIN = 30
         # Hauteur maximale du graphique
@@ -431,7 +440,7 @@ class Graphique(Thread):
         # la hauteur du grpahique
         self.H = self.HEIGHT - 2 * self.MARGIN
         # La distance au haut de la fenêtre
-        self.TOP = 700
+        self.TOP = 680
         # La distance à gauche du graphique du pays
         self.LEFT_1 = 1200
         # La distance à gauche du graphique du monde
@@ -440,13 +449,13 @@ class Graphique(Thread):
 
         ## Init info fenêtre
 
-        delta = 300 / (self.nb_param - 1)
+        delta = 330 / (self.nb_param - 1)
 
         x = 0
         for key in self.ex_param:
-            pygame.draw.line(self.screen, self.ex_param[key]['color'], (900, 730 + delta * x), (1000, 730 + delta * x), 2)
-            center_text(self.screen, data_font, key, FG, 100, 30, 700 + delta * x, 900)
-            center_text(screen, font, key, FG, 300, 50, 230 + delta * x, 1600)
+            pygame.draw.line(self.screen, self.ex_param[key]['color'], (900, 715 + delta * x), (1000, 715 + delta * x), 2)
+            center_text(self.screen, data_font, key, FG, 100, 30, 680 + delta * x, 900)
+            center_text(screen, font, key, FG, 300, 50, 210 + delta * x, 1600)
             x += 1
 
         center_text(self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30, 650, self.LEFT_1)
@@ -544,9 +553,11 @@ class Graphique(Thread):
         y_coord = self.get_scale_value(0, my, 10)
         for y in y_coord:
             X = self.MARGIN + int(y * dy)
+            d = str(round(y, 2))
+            w, _ = font.size(d)
             pygame.draw.line(self.screen, FG, (self.LEFT_1 + X, self.HAUT + self.TOP),
                             (self.LEFT_1 + X, self.DHAUT + self.TOP), 2)
-            self.screen.blit(data_font.render(str(round(y, 2)), True, FG), (self.LEFT_1 + X - 2, self.DHAUT + self.TOP))
+            self.screen.blit(data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP))
 
         x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
         for x in x_coord:
@@ -570,7 +581,7 @@ class Graphique(Thread):
         dx = self.H / mx
         dy = self.W / my
 
-        create_mask(self.TOP, self.LEFT_2 - 100, self.WIDTH + 110, self.HEIGHT, BG)
+        create_mask(self.TOP, self.LEFT_2 - 100, self.WIDTH + 150, self.HEIGHT, BG)
 
         for n in range(len(self.world_data)):
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.world_data[n]]
@@ -587,9 +598,11 @@ class Graphique(Thread):
         y_coord = self.get_scale_value(0, my, 10)
         for y in y_coord:
             X = self.MARGIN + int(y * dy)
+            d = str(round(y, 2))
+            w, _ = font.size(d)
             pygame.draw.line(self.screen, FG, (self.LEFT_2 + X, self.HAUT + self.TOP),
                             (self.LEFT_2 + X, self.DHAUT + self.TOP), 2)
-            self.screen.blit(data_font.render(str(round(y, 2)), True, FG), (self.LEFT_2 + X - 2, self.DHAUT + self.TOP))
+            self.screen.blit(data_font.render(d, True, FG), (self.LEFT_2 + X - w // 2 + 7, self.DHAUT + self.TOP))
 
         x_coord = self.get_scale_value(0, self.N, 10)
         for x in x_coord:
@@ -613,17 +626,17 @@ class Graphique(Thread):
         create_mask(0, 1550, 400, 120, BG)
         blit_text(screen, model.country.name, (1600, 30), 60, 300, 80)
         center_text(screen, data_font, f"{model.N:,}", FG, 300, 50, 160, 1600)
-        delta = 300 / (N - 1)
+        delta = 330 / (N - 1)
         x = 0
         for key in model.param_dict:
             center_text(screen, data_font,
-                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 260 + delta * x, 1600)
+                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 240 + delta * x, 1600)
             x += 1
         create_mask(30, 10, 1540, 620, BG)
         border = get_scale(model.country, 1500, 500, 50, 20)
         for c in border:
             pygame.draw.polygon(screen, (model.country.r, model.country.g, model.country.b), c)
-            pygame.draw.lines(screen, WHITE, True, c, 1)
+            pygame.draw.lines(screen, FG, True, c, 1)
         pygame.draw.rect(screen, FG, (40, 540, 70, 70), 1)
         screen.blit(back_arrow, (50, 550))
 
@@ -645,11 +658,11 @@ class Graphique(Thread):
         update_mask(n)
         model = self.models[self.num_model]
         center_text(screen, data_font, f"{model.N:,}", FG, 300, 50, 160, 1600)
-        w = 300 / (n - 1)
+        w = 330 / (n - 1)
         x = 0
         for key in model.param_dict:
             center_text(screen, data_font,
-                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 260 + w * x, 1600)
+                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 240 + w * x, 1600)
             x += 1
 
 
@@ -660,11 +673,11 @@ class Graphique(Thread):
         n = len(self.world_data)
         update_mask(n)
         center_text(screen, data_font, f"{self.N:,}", FG, 300, 50, 160, 1600)
-        w = 300 / (n - 1)
+        w = 330 / (n - 1)
         x = 0
         for key in self.world_data:
             center_text(screen, data_font,
-                        f"{int(key[-1]):,}", FG, 300, 50, 260 + w * x, 1600)
+                        f"{int(key[-1]):,}", FG, 300, 50, 240 + w * x, 1600)
             x += 1
 
 
@@ -723,7 +736,7 @@ models, c_name, c_bound, c_tag = [], [], [], []
 x = 0
 for c in countries:
     c.show()
-    models.append(SIRM(c, int(x == num_country), 0.6, 12, 0.7, 100))
+    models.append(SIRM(c, int(x == num_country), 0.5, 12, 0.05, 150))
     c_name.append(c.name)
     c_bound.append(c.bound)
     c_tag.append(c.tag)
@@ -734,7 +747,6 @@ graph.update_world()
 graph.change_countries(num_country)
 graph.start()
 
-country = countries[num_country]
 
 while True:
     clock.tick(FPS)
@@ -753,12 +765,11 @@ while True:
                             if in_rect(cb, x, y):
                                 for b in c.border:
                                     if in_poly((x, y), b):
-                                        if c != country:
-                                            country = c
-                                            num_country = c_tag.index(c.tag)
+                                        n = c_tag.index(c.tag)
+                                        if num_country != n:
+                                            num_country = n
                                             graph.change_countries(num_country)
-                                        changed = True
-                                        zoomed = True
+                                        changed = zoomed = True
                                         on_world = False
                                         break
 
@@ -769,9 +780,8 @@ while True:
 
             else:
                 if in_rect(BTN_BOUND, x, y):
-                    zoomed = False
+                    zoomed = on_world = False
                     create_mask(30, 10, 1540, 620, BG)
-                    on_world = False
                     for c in countries:
                         c.show()
 
@@ -780,3 +790,11 @@ while True:
         graph.update()
 
     pygame.display.update()
+
+
+# TODO:
+#       - coord pt s/ graph
+#       - écriture nb en scientifq
+#       - adapter hauteur en f° nb param
+#       - possibilité save data sim (par pays ?, par compartiment ?, sql)
+#       - Alexis pls help
