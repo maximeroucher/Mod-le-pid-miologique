@@ -36,7 +36,7 @@ BG = (32, 34, 37)
 FG = (182, 185, 190)
 
 # Coordonnées du carré du bouton (l, b, r, t)
-BTN_BOUND = [40, 610, 110, 540]
+BTN_BOUND = [40, 590, 110, 520]
 
 
 ### Outils
@@ -110,7 +110,7 @@ def in_rect(points, x, y):
     ---
     param :
 
-        - points (list) liste des points (b, r, t, l)
+        - points (list) liste des points (l, b, r, t)
         - x (int) position x de la souris
         - y (int) position y de la souris
     """
@@ -391,6 +391,7 @@ class Graphique(Thread):
         ## Surface
 
         self.screen = screen
+        self.need_mask = False
 
 
         ## Modèles
@@ -445,6 +446,14 @@ class Graphique(Thread):
         self.LEFT_1 = 1200
         # La distance à gauche du graphique du monde
         self.LEFT_2 = 100
+        # Coordonnées du graphique pays
+        self.COUNTRY_GRAPH_BOUND = (self.LEFT_1 + self.MARGIN, self.TOP + self.HAUT, self.LEFT_1 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
+        # Coefficient entre la largeur du graphique et sa valeur en ce point
+        self.COEF_WIDTH = 1.08 / self.WIDTH
+        # Coefficient entre la hauteur du graphique et sa valeur en ce point
+        self.COEF_HEIGHT = 1.189 / self.HEIGHT
+        # Coordonnées du graphique mondial
+        self.WORLD_GRAPH_BOUND = (self.LEFT_2 + self.MARGIN, self.TOP + self.HAUT, self.LEFT_2 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
 
 
         ## Init info fenêtre
@@ -493,7 +502,6 @@ class Graphique(Thread):
             650, self.LEFT_1)
         if len(self.data[self.num_model][0]) >= 2:
             self.display_graph(1)
-            self.display_graph(2)
 
 
     def get_scale_value(self, m, M, nb_pt):
@@ -561,7 +569,7 @@ class Graphique(Thread):
 
         x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
         for x in x_coord:
-            form = f"{int(x):,}"
+            form = "{:.2e}".format(int(x))
             w = data_font.size(form)[0]
             Y = self.HAUT - int(x * dx)
             pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
@@ -606,7 +614,7 @@ class Graphique(Thread):
 
         x_coord = self.get_scale_value(0, self.N, 10)
         for x in x_coord:
-            form = f"{int(x):,}"
+            form = "{:.2e}".format(int(x))
             w = data_font.size(form)[0]
             Y = self.HAUT - int(x * dx)
             pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, Y + self.TOP),
@@ -625,20 +633,20 @@ class Graphique(Thread):
         update_mask(N)
         create_mask(0, 1550, 400, 120, BG)
         blit_text(screen, model.country.name, (1600, 30), 60, 300, 80)
-        center_text(screen, data_font, f"{model.N:,}", FG, 300, 50, 160, 1600)
+        center_text(screen, data_font, "{:.2e}".format(model.N), FG, 300, 50, 160, 1600)
         delta = 330 / (N - 1)
         x = 0
         for key in model.param_dict:
-            center_text(screen, data_font,
-                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 240 + delta * x, 1600)
+            center_text(screen, data_font, "{:.2e}".format(
+                int(model.param_dict[key]['value'] * model.N)), FG, 300, 50, 240 + delta * x, 1600)
             x += 1
         create_mask(30, 10, 1540, 620, BG)
         border = get_scale(model.country, 1500, 500, 50, 20)
         for c in border:
             pygame.draw.polygon(screen, (model.country.r, model.country.g, model.country.b), c)
             pygame.draw.lines(screen, FG, True, c, 1)
-        pygame.draw.rect(screen, FG, (40, 540, 70, 70), 1)
-        screen.blit(back_arrow, (50, 550))
+        pygame.draw.rect(screen, FG, (40, 520, 70, 70), 1)
+        screen.blit(back_arrow, (50, 530))
 
 
     def update_world(self):
@@ -657,12 +665,12 @@ class Graphique(Thread):
         n = len(self.world_data)
         update_mask(n)
         model = self.models[self.num_model]
-        center_text(screen, data_font, f"{model.N:,}", FG, 300, 50, 160, 1600)
+        center_text(screen, data_font, "{:.2e}".format(model.N), FG, 300, 50, 160, 1600)
         w = 330 / (n - 1)
         x = 0
         for key in model.param_dict:
             center_text(screen, data_font,
-                        f"{int(model.param_dict[key]['value'] * model.N):,}", FG, 300, 50, 240 + w * x, 1600)
+                        "{:.2e}".format(int(model.param_dict[key]['value'] * model.N)), FG, 300, 50, 240 + w * x, 1600)
             x += 1
 
 
@@ -672,13 +680,49 @@ class Graphique(Thread):
         """
         n = len(self.world_data)
         update_mask(n)
-        center_text(screen, data_font, f"{self.N:,}", FG, 300, 50, 160, 1600)
+        center_text(screen, data_font, "{:.2e}".format(self.N), FG, 300, 50, 160, 1600)
         w = 330 / (n - 1)
         x = 0
         for key in self.world_data:
             center_text(screen, data_font,
-                        f"{int(key[-1]):,}", FG, 300, 50, 240 + w * x, 1600)
+                        "{:.2e}".format(int(key[-1])), FG, 300, 50, 240 + w * x, 1600)
             x += 1
+
+
+    def graph_value(self):
+        """ Affiche les valeurs du graphique à la position de la souris
+        ---
+        """
+        # Si un masque doit être créé pour réécrire les valeur au point de la souris
+        if self.need_mask:
+            create_mask(600, 10, 150, 70, BG)
+            self.need_mask = False
+
+        x, y = pygame.mouse.get_pos()
+         # Si la souris est sur le graphique pays
+        if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
+            center_text(
+                screen, data_font,
+                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(graph.world_data[0]))}",
+                FG, 150, 50, 600, 15)
+            center_text(
+                screen, data_font, "y : {:.2e}".format(
+                    int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * graph.models[graph.num_model].N)),
+                FG, 150, 50, 630, 15)
+            self.need_mask = True
+
+        # Si la souris est sur le graphique mondial
+        elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
+            center_text(
+                self.screen, data_font,
+                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
+                FG, 150, 50, 600, 15)
+            center_text(
+                self.screen, data_font, "y : {:.2e}".format(
+                    int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
+                FG, 150, 50, 630, 15)
+            self.need_mask = True
+        return x, y
 
 
     def run(self):
@@ -689,6 +733,7 @@ class Graphique(Thread):
         for _ in range(self.nb_iterations[self.num_model]):
             self.y.append(len(self.y))
             self.gen_data()
+            self.graph_value()
             if num_country == self.num_model and (not on_world or zoomed):
                 self.update_country_info()
             else:
@@ -704,8 +749,7 @@ countries = from_json(data)
 pygame.init()
 
 # Img
-back_arrow = pygame.image.load("left-arrow.png")
-back_arrow = pygame.transform.scale(back_arrow, (50, 50))
+back_arrow = pygame.transform.scale(pygame.image.load("left-arrow.png"), (50, 50))
 
 # Font
 font = pygame.font.SysFont("montserrat", 24)
@@ -756,8 +800,9 @@ while True:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             quit()
 
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
-            x, y = pygame.mouse.get_pos()
+        x, y = graph.graph_value()
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
             if not zoomed:
                 if in_rect((40, 650, 1550, 0), x, y):
                     for c in countries:
@@ -793,8 +838,6 @@ while True:
 
 
 # TODO:
-#       - coord pt s/ graph
-#       - écriture nb en scientifq
 #       - adapter hauteur en f° nb param
-#       - possibilité save data sim (par pays ?, par compartiment ?, sql)
+#       - possibilité save data sim (par pays ?, par compartiment ?, sql ?)
 #       - Alexis pls help

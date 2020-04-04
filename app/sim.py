@@ -166,6 +166,7 @@ class Compartiment:
 
     def give(self, d):
         """ Ajoute tout le pourcentage donné
+        ---
         """
         self.N += d
 
@@ -187,57 +188,3 @@ class Event:
     def __init__(self):
         """ Initialisation de la classe Event, évènement ponctuel qui ont un effet sur l'évolution de l'éipidémie
         """
-
-
-# Couleur de fond
-BG = (32, 34, 37)
-# Couleur du texte, des axes des graphiques et des bords des pays
-FG = (182, 185, 190)
-
-
-def in_rect(points, x, y):
-    return points[0] <= x and points[1] >= y and points[2] >= x and points[3] <= y
-
-
-def create_mask(t, l, w, h, color=BG):
-    country_name_mask = pygame.Surface((w, h), pygame.SRCALPHA)
-    country_name_mask.fill(color)
-    screen.blit(country_name_mask, (l, t))
-
-
-def center_text(surface, font, text, color, w, h, t, l):
-    wi, he = font.size(text)
-    surface.blit(font.render(text, True, color), (l + (w - wi) // 2, t + (h - he) // 2))
-
-""" 
-
-
-HAUTEUR = 400
-LARGEUR = 500
-TOP = 50
-LEFT = 50
-WIDTH = 350
-HEIGHT = 200
-
-pygame.init()
-font = pygame.font.SysFont("montserrat", 24)
-screen = pygame.display.set_mode((LARGEUR, HAUTEUR))
-screen.fill(BG)
-pygame.draw.rect(screen, (125, 125, 125), (LEFT, TOP, WIDTH, HEIGHT))
-
-pygame.display.update()
-
-while True:
-
-    for event in pygame.event.get():
-
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == pygame.QUIT:
-            quit()
-
-        x, y = pygame.mouse.get_pos()
-        if in_rect((TOP, LEFT + WIDTH, TOP + HEIGHT, LEFT), y, x):
-            create_mask(HAUTEUR - 50, LARGEUR - 500, 500, 50, BG)
-            center_text(screen, font, f"x : {(x - LEFT) * 700 / WIDTH}, y : {650 - (y - TOP) * 650 / HEIGHT}", FG, 500, 50, HAUTEUR - 50, LARGEUR - 500)
-
-    pygame.display.update()
- """
