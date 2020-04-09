@@ -16,7 +16,7 @@ import shapefile
 from dbfread import DBF, read
 from shapely.geometry import Point, Polygon
 
-from sim import SIR, SIRM
+from sim import SIR, SIRM, TableManager
 
 
 # Le nombre d'images par seconde
@@ -388,6 +388,11 @@ class Graphique(Thread):
         self.daemon = True
 
 
+        ## Manager de base de donnée
+
+        self.tbm = TableManager("Test", models)
+
+
         ## Surface
 
         self.screen = screen
@@ -425,7 +430,7 @@ class Graphique(Thread):
         ## Constantes
 
         # Temps d'une journée de simulation
-        self.SLEEP_TIME = .01
+        self.SLEEP_TIME = .001
         # Largeur de la fenêtre
         self.WIDTH = 700
         # Hauteur de la fenêtre
@@ -470,7 +475,7 @@ class Graphique(Thread):
         center_text(self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30, 650, self.LEFT_1)
 
 
-    def gen_data(self):
+    def gen_data(self, day):
         """ Fait avancer la simulation d'un jour
         ---
         """
@@ -485,6 +490,7 @@ class Graphique(Thread):
                 data[x] += val
         for x in range(self.nb_param):
             self.world_data[x].append(data[x])
+        self.tbm.save_data(day)
 
 
     def change_countries(self, n):
@@ -729,10 +735,13 @@ class Graphique(Thread):
         """ Lance la simulation et l'affichage du graphique
         ---
         """
-        self.gen_data()
+        self.tbm.save_model_param()
+        x = 0
+        self.gen_data(x)
         for _ in range(self.nb_iterations[self.num_model]):
+            x += 1
             self.y.append(len(self.y))
-            self.gen_data()
+            self.gen_data(x)
             self.graph_value()
             if num_country == self.num_model and (not on_world or zoomed):
                 self.update_country_info()
@@ -839,5 +848,5 @@ while True:
 
 # TODO:
 #       - adapter hauteur en f° nb param
-#       - possibilité save data sim (par pays ?, par compartiment ?, sql ?)
+#       - load sim from data
 #       - Alexis pls help

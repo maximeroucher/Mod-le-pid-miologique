@@ -1,8 +1,10 @@
 import os
+import sqlite3
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
 import pygame
+import easygui
 
 
 class SIR:
@@ -70,17 +72,20 @@ class SIRM:
         ---
         param :
 
-            - N (int) le nombre de personne dans la simulation
+            - country (Pays) le pays dans laquelle se déroule la simlation
             - N0 (int) le nombre de personne infectées au début de la simulation
-            - t (float, 0 <= t <= 1) la transmissibilité de la maladie
+            - transm (float, 0 <= t <= 1) la transmissibilité de la maladie
             - tp (int) le nombre de jour de maladie une fois infecté
             - l (float, 0 <= l <= 1) la léthalité de la maladie
             - nb_iterations (int) le nombre de jour de la simulation
         """
+        assert transm >= 0 and transm <= 1
+        assert l >= 0 and l <= 1
         self.country = country
         self.N = self.country.pop
-        self.S = (self.N - N0) / self.N
-        self.I = N0 / self.N
+        self.N0 = N0
+        self.S = (self.N - self.N0) / self.N
+        self.I = self.N0 / self.N
         self.R = 0
         self.M = 0
         self.transmission = transm
@@ -99,6 +104,10 @@ class SIRM:
                            "Population totale":
                            {"value": 1, "color": (128, 179, 64)}
                           }
+
+
+    def getCI(self):
+        return {"N0": self.N0, "Transmission": self.transmission, "Léthalité": self.lethalite, "Tps_maladie": self.temps_maladie, "Nb_iteration": self.nb_iterations}
 
 
     def update(self):
@@ -123,6 +132,7 @@ class SIRM:
 
     def format_sim(self):
         """ Formmatte les données de la simulation pour l'affichage
+        ---
         """
         return {'Sains': self.S, "Infectés": self.I, "Réscapés": self.R, "Morts": self.M}
 
@@ -186,5 +196,125 @@ class ModeleCompartimental:
 class Event:
 
     def __init__(self):
-        """ Initialisation de la classe Event, évènement ponctuel qui ont un effet sur l'évolution de l'éipidémie
+        """ Initialisation de la classe Event, évènement ponctuel qui ont un effet sur l'évolution de l'épidémie
+        ---
         """
+
+
+class TableManager:
+
+    def __init__(self, name, models):
+        """ Gestionnaire de base de donnée pour sauvegarder les données de la simulation
+        ---
+        param :
+
+            - name (str) le nom de la base de donnée
+            - models list(ModeleCompartimental) la liste des modèles de la simulation
+        """
+        self.models = models
+        self.keys = [s for s in self.models[0].param_dict]
+        self.formated_keys = [x.replace(" ", "_") for x in self.keys]
+        self.data_base_name = name
+
+        # Création / Connection à la base de donnée
+        filename = f"{self.data_base_name}.db"
+        filepath = f"./{filename}"
+        if not filename in os.listdir():
+            open(filepath, 'w').close()
+        self.data_base = sqlite3.connect(filepath, check_same_thread=False)
+        self.cursor = self.data_base.cursor()
+        assert self.check_bd_valid()
+        tables_keys = ", ".join([f"{x.replace(' ', '_')} integer" for x in [x for x in self.models[0].param_dict]])
+        for model in self.models:
+            self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {model.country.tag} (id integer PRIMARY KEY, {tables_keys})""")
+        self.data_base.commit()
+
+
+    def check_bd_valid(self):
+        """ Vérifie que la base de donnée à les mêmes paramètres pour chaque table
+        ---
+        result :
+
+            - bool la base est "valide"
+        """
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        res = [x[0] for x in self.cursor.fetchall()]
+        if len(res) == 0:
+            return True
+        if not "Conditions_initiales" in res:
+            return False
+        else:
+            res.remove("Conditions_initiales")
+        test_keys = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({res[0]})").fetchall()]
+        x = 1
+        while x < len(res):
+            data = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({res[x]})").fetchall()]
+            if data != test_keys:
+                return False
+            x += 1
+        return True
+
+
+    def save_model_param(self):
+        """ Sauvegarde les conditions initiales de la simulation
+        ---
+        param :
+
+            - model (ModeleCompartimental) le modèle contenant le pays d'origine de l'épidémie
+        """
+        model = [m for m in self.models if m.I != 0][0]
+        data = model.getCI()
+        k = list(data.keys())
+        tables_keys = ", ".join([x + " REAL" for x in k])
+        command = f"""CREATE TABLE IF NOT EXISTS Conditions_initiales (id integer PRIMARY KEY, Pays text NOT NULL, {tables_keys})"""
+        self.cursor.execute(command)
+        command = f"""INSERT INTO Conditions_initiales {tuple(["Pays"] + k)} VALUES {tuple([model.country.tag] + list(data.values()))}"""
+        self.cursor.execute(command)
+        self.data_base.commit()
+
+
+    def save_data(self, jour):
+        """ Sauvegarde les données de tous les pays dans la table du numéro du jour donné
+        ---
+        param :
+
+            - jour (int) le numéro du jour
+        """
+        for model in self.models:
+            if model.I != 0:
+                v = [int(model.param_dict[x]["value"] * model.N) for x in self.keys]
+                self.cursor.execute(f"""INSERT INTO {model.country.tag} {tuple(self.formated_keys)} VALUES {tuple(v)}""")
+        self.data_base.commit()
+
+
+    def end(self):
+        """ Déconnecte le programme de la base de donnée
+        ---
+        """
+        self.data_base.close()
+
+
+
+class Country_Test:
+
+    def __init__(self, pop, name, tag):
+        """ Remplacement de la classe Pays pour les test, plus facile à init
+        ---
+        """
+        self.pop = pop
+        self.name = name
+        self.tag = tag
+
+
+# Test
+if __name__ == "__main__":
+    test = Country_Test(100, 'test', "TST")
+    sirm = SIRM(test, 1, .5, 6, .9, 100)
+    tab = TableManager("test", [sirm])
+    tab.save_data(1)
+    f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
+    if f:
+        if not f.endswith(".db"):
+            easygui.msgbox("L'extension du fichier n'est pas correcte")
+        else:
+            print(f)
