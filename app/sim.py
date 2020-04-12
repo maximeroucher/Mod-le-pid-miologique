@@ -7,22 +7,26 @@ import pygame
 import easygui
 
 
+
 class SIR:
 
-    def __init__(self, country, N0, trans, tp, nb_iterations):
+    def __init__(self, country, N0, trans, tp, nb_iterations, use_db):
         """ Simulation selon le modèle SIR
         ---
         param :
 
             - N (int) le nombre de personne dans la simulation
             - N0 (int) le nombre de personne infectées au début de la simulation
-            - t (float) la transmissibilité de la maladie
+            - trans (float) la transmissibilité de la maladie
             - tp (int) le nombre de jour de maladie une fois infecté
             - nb_iterations (int) le nombre de jour de la simulation
         """
+        assert trans >= 0 and trans <= 1
+        self.use_db = use_db
         self.country = country
         self.N = self.country.pop
-        self.S = (self.N - N0) / self.N
+        self.N0 = N0
+        self.S = (self.N - self.N0) / self.N
         self.I = N0 / self.N
         self.R = 0
         self.transmission = trans
@@ -38,16 +42,34 @@ class SIR:
                             }
 
 
-    def update(self):
+    def update(self, tbm, jour):
         """ Avance d'un jour la simulation
         ---
         """
-        dS = -self.transmission * self.I * self.S
-        dI = (self.transmission * self.S - self.pct_malade) * self.I
-        dR = self.pct_malade * self.I
-        self.S += dS
-        self.I += dI
-        self.R += dR
+        if self.use_db:
+            res = tbm.get_country_data(jour, self.country.tag)
+            if res is not None:
+                self.S, self.I, self.R = [x / self.N for x in res]
+                self.update_param_dict()
+        else:
+            dS = -self.transmission * self.I * self.S
+            dI = (self.transmission * self.S - self.pct_malade) * self.I
+            dR = self.pct_malade * self.I
+            self.S += dS
+            self.I += dI
+            self.R += dR
+            self.pop_tot = self.S + self.I + self.R
+            self.update_param_dict()
+
+
+    def getCI(self):
+        return {"N0": self.N0, "Transmission": self.transmission, "Tps_maladie": self.temps_maladie, "Nb_iteration": self.nb_iterations}
+
+
+    def update_param_dict(self):
+        """ Enregistre les données de la classe dans le dictionnaire
+        ---
+        """
         self.param_dict["Sains"]["value"] = self.S
         self.param_dict["Infectés"]["value"] = self.I
         self.param_dict["Rétablis"]["value"] = self.R
@@ -65,9 +87,10 @@ class SIR:
         return f"Population de {self.N} personnes.\nRésultat :\n\t- {a}"
 
 
+
 class SIRM:
 
-    def __init__(self, country, N0, transm, tp, l, nb_iterations):
+    def __init__(self, country, N0, transm, tp, l, nb_iterations, use_db):
         """ Simulation selon le modèle SIR avec l'ajout de la léthalité de la maladie
         ---
         param :
@@ -81,6 +104,7 @@ class SIRM:
         """
         assert transm >= 0 and transm <= 1
         assert l >= 0 and l <= 1
+        self.use_db = use_db
         self.country = country
         self.N = self.country.pop
         self.N0 = N0
@@ -88,6 +112,7 @@ class SIRM:
         self.I = self.N0 / self.N
         self.R = 0
         self.M = 0
+        self.pop_tot = self.N
         self.transmission = transm
         self.lethalite = l
         self.temps_maladie = tp
@@ -110,31 +135,44 @@ class SIRM:
         return {"N0": self.N0, "Transmission": self.transmission, "Léthalité": self.lethalite, "Tps_maladie": self.temps_maladie, "Nb_iteration": self.nb_iterations}
 
 
-    def update(self):
+    def update(self, tbm, jour):
         """ Avance d'un jour la simulation
         ---
         """
-        dS = -self.transmission * self.I * self.S
-        dI = (self.transmission * self.S - self.pct_malade - self.lethalite) * self.I
-        dR = self.pct_malade * self.I
-        dM = self.lethalite * self.I
-        self.S += dS
-        self.I += dI
-        self.R += dR
-        self.M += dM
-        n = self.S + self.I + self.R
+        if self.use_db:
+            res = tbm.get_country_data(jour, self.country.tag)
+            if res is not None:
+                self.S, self.I, self.R, self.M, self.pop_tot = [x / self.N for x in res]
+                self.update_param_dict()
+        else:
+            dS = -self.transmission * self.I * self.S
+            dI = (self.transmission * self.S - self.pct_malade - self.lethalite) * self.I
+            dR = self.pct_malade * self.I
+            dM = self.lethalite * self.I
+            self.S += dS
+            self.I += dI
+            self.R += dR
+            self.M += dM
+            self.pop_tot = self.S + self.I + self.R
+            self.update_param_dict()
+
+
+    def update_param_dict(self):
+        """ Enregistre les données de la classe dans le dictionnaire
+        ---
+        """
         self.param_dict["Sains"]["value"] = self.S
         self.param_dict["Infectés"]["value"] = self.I
         self.param_dict["Rétablis"]["value"] = self.R
         self.param_dict["Morts"]["value"] = self.M
-        self.param_dict["Population totale"]["value"] = n
+        self.param_dict["Population totale"]["value"] = self.pop_tot
 
 
     def format_sim(self):
         """ Formmatte les données de la simulation pour l'affichage
         ---
         """
-        return {'Sains': self.S, "Infectés": self.I, "Réscapés": self.R, "Morts": self.M}
+        return {'Sains': self.S * self.N, "Infectés": self.I * self.N, "Rétablis": self.R * self.N, "Morts": self.M * self.N}
 
 
     def __str__(self):
@@ -181,6 +219,7 @@ class Compartiment:
         self.N += d
 
 
+
 class ModeleCompartimental:
 
     def __init__(self, comp_list):
@@ -193,6 +232,7 @@ class ModeleCompartimental:
         self.param_dict = {comp.nom : {"value": comp.N, "color": comp.color} for comp in self.comp_dict}
 
 
+
 class Event:
 
     def __init__(self):
@@ -201,15 +241,17 @@ class Event:
         """
 
 
+
 class TableManager:
 
-    def __init__(self, name, models):
+    def __init__(self, name, models, overwrite):
         """ Gestionnaire de base de donnée pour sauvegarder les données de la simulation
         ---
         param :
 
             - name (str) le nom de la base de donnée
             - models list(ModeleCompartimental) la liste des modèles de la simulation
+            - overwrite (bool) supprimer le fichier déjà existant
         """
         self.models = models
         self.keys = [s for s in self.models[0].param_dict]
@@ -219,15 +261,21 @@ class TableManager:
         # Création / Connection à la base de donnée
         filename = f"{self.data_base_name}.db"
         filepath = f"./{filename}"
-        if not filename in os.listdir():
+        if overwrite or (not filename in os.listdir()):
             open(filepath, 'w').close()
         self.data_base = sqlite3.connect(filepath, check_same_thread=False)
         self.cursor = self.data_base.cursor()
-        assert self.check_bd_valid()
-        tables_keys = ", ".join([f"{x.replace(' ', '_')} integer" for x in [x for x in self.models[0].param_dict]])
-        for model in self.models:
-            self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {model.country.tag} (id integer PRIMARY KEY, {tables_keys})""")
-        self.data_base.commit()
+        self.tables = [x[0] for x in self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+        self.ctables = self.tables
+        if len(self.tables) == 0:
+            self.is_empty = True
+            tables_keys = ", ".join([f"{x.replace(' ', '_')} integer" for x in [x for x in self.models[0].param_dict]])
+            for model in self.models:
+                self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {model.country.tag} (id integer PRIMARY KEY, {tables_keys})""")
+            self.data_base.commit()
+        else:
+            assert self.check_bd_valid()
+            self.is_empty = False
 
 
     def check_bd_valid(self):
@@ -237,22 +285,42 @@ class TableManager:
 
             - bool la base est "valide"
         """
-        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        res = [x[0] for x in self.cursor.fetchall()]
-        if len(res) == 0:
-            return True
-        if not "Conditions_initiales" in res:
+        self.ctables = self.tables
+        if not "Conditions_initiales" in self.ctables:
             return False
         else:
-            res.remove("Conditions_initiales")
-        test_keys = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({res[0]})").fetchall()]
+            self.ctables.remove("Conditions_initiales")
+        test_keys = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({self.ctables[0]})").fetchall()]
         x = 1
-        while x < len(res):
-            data = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({res[x]})").fetchall()]
+        while x < len(self.ctables):
+            data = [y[1] for y in self.cursor.execute(f"PRAGMA table_info ({self.ctables[x]})").fetchall()]
             if data != test_keys:
                 return False
             x += 1
         return True
+
+
+    def sim_length(self):
+        return self.cursor.execute(f"""SELECT COUNT(*) FROM {self.ctables[0]}""").fetchone()[0]
+
+
+    def get_country_data(self, jour, tab):
+        """ Récupère les données du pays le jour donné, si les donné du pays ne sont pas donné, c'est que son état n'as pas changé depuis le jour précédent
+        ---
+        param :
+
+            - jour (int) le jour des données de la simulation renvoyées
+        """
+        try:
+            return self.cursor.execute(f"""Select * from {tab} where id = {jour}""").fetchone()[1:]
+        except:
+            return None
+
+
+    def get_CI(self):
+        """ Récupère les conditons initiales de la simulation enregistrée
+        """
+        return self.cursor.execute("""Select * from Conditions_initiales """).fetchone()
 
 
     def save_model_param(self):
@@ -308,13 +376,13 @@ class Country_Test:
 
 # Test
 if __name__ == "__main__":
-    test = Country_Test(100, 'test', "TST")
-    sirm = SIRM(test, 1, .5, 6, .9, 100)
-    tab = TableManager("test", [sirm])
-    tab.save_data(1)
-    f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
+    test = Country_Test(1379302770, 'test', "TST")
+    sirm = SIRM(test, 1, .5, 6, .9, 100, True)
+    tab = TableManager("Test", [sirm], False)
+    sirm.update(tab, 5)
+    """ f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
     if f:
         if not f.endswith(".db"):
             easygui.msgbox("L'extension du fichier n'est pas correcte")
         else:
-            print(f)
+            print(f) """

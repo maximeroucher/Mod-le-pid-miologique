@@ -278,10 +278,10 @@ def update_mask(n):
 
         - n (int) le nombre de masque a créer
     """
-    w = 330 / (n - 1)
+    w = 750 / n
     create_mask(170, 1550, 400, 50, BG)
-    for x in range(n):
-        create_mask(250 + w * x, 1550, 400, 50, BG)
+    for x in range(1, n + 1):
+        create_mask(177 + w * x, 1550, 400, 50, BG)
 
 
 # Redimensionnement
@@ -374,7 +374,7 @@ class Pays:
 
 class Graphique(Thread):
 
-    def __init__(self, screen, models):
+    def __init__(self, screen, models, use_db):
         """ Initialisation d'un graphique
         ---
         param :
@@ -390,7 +390,8 @@ class Graphique(Thread):
 
         ## Manager de base de donnée
 
-        self.tbm = TableManager("Test", models)
+        self.use_db = use_db
+        self.tbm = TableManager("Test", models, not self.use_db)
 
 
         ## Surface
@@ -417,7 +418,6 @@ class Graphique(Thread):
             self.data.append([[model.param_dict[key]["value"] * model.N] for key in self.keys])
 
         self.y = [0]
-        self.nb_iterations = [model.nb_iterations for model in self.models]
         self.num_model = 0
 
         self.world_data = [[0] for _ in range(self.nb_param)]
@@ -425,6 +425,12 @@ class Graphique(Thread):
             for n in range(self.nb_param):
                 self.world_data[n][0] += self.data[x][n][0]
         self.color_data = [model.param_dict[x]["color"] for x in self.ex_param]
+
+        if self.use_db:
+            max_length = self.tbm.sim_length() - 1
+            self.nb_iterations = [min(model.nb_iterations, max_length) for model in self.models]
+        else:
+            self.nb_iterations = [model.nb_iterations for model in self.models]
 
 
         ## Constantes
@@ -448,7 +454,7 @@ class Graphique(Thread):
         # La distance au haut de la fenêtre
         self.TOP = 680
         # La distance à gauche du graphique du pays
-        self.LEFT_1 = 1200
+        self.LEFT_1 = 920
         # La distance à gauche du graphique du monde
         self.LEFT_2 = 100
         # Coordonnées du graphique pays
@@ -459,20 +465,7 @@ class Graphique(Thread):
         self.COEF_HEIGHT = 1.189 / self.HEIGHT
         # Coordonnées du graphique mondial
         self.WORLD_GRAPH_BOUND = (self.LEFT_2 + self.MARGIN, self.TOP + self.HAUT, self.LEFT_2 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
-
-
-        ## Init info fenêtre
-
-        delta = 330 / (self.nb_param - 1)
-
-        x = 0
-        for key in self.ex_param:
-            pygame.draw.line(self.screen, self.ex_param[key]['color'], (900, 715 + delta * x), (1000, 715 + delta * x), 2)
-            center_text(self.screen, data_font, key, FG, 100, 30, 680 + delta * x, 900)
-            center_text(screen, font, key, FG, 300, 50, 210 + delta * x, 1600)
-            x += 1
-
-        center_text(self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30, 650, self.LEFT_1)
+        self.DELTA = 750 / self.nb_param
 
 
     def gen_data(self, day):
@@ -483,14 +476,15 @@ class Graphique(Thread):
         for n in range(len(self.models)):
             model = self.models[n]
             if model.I != 0:
-                model.update()
+                model.update(self.tbm, day + 1)
             for x in range(self.nb_param):
                 val = model.param_dict[self.keys[x]]["value"] * model.N
                 self.data[n][x].append(val)
                 data[x] += val
         for x in range(self.nb_param):
             self.world_data[x].append(data[x])
-        self.tbm.save_data(day)
+        if not self.use_db:
+            self.tbm.save_data(day)
 
 
     def change_countries(self, n):
@@ -508,6 +502,19 @@ class Graphique(Thread):
             650, self.LEFT_1)
         if len(self.data[self.num_model][0]) >= 2:
             self.display_graph(1)
+        create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG)
+        x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
+        mx = max([max(x) for x in self.data[self.num_model]])
+        dx = self.H / mx
+        for x in x_coord:
+            form = "{:.2e}".format(int(x))
+            w = data_font.size(form)[0]
+            Y = self.HAUT - int(x * dx)
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
+                            (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
+            self.screen.blit(
+                data_font.render(form, True, FG),
+                ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
 
 
     def get_scale_value(self, m, M, nb_pt):
@@ -550,7 +557,8 @@ class Graphique(Thread):
         dx = self.H / mx
         dy = self.W / my
 
-        create_mask(self.TOP, self.LEFT_1 - 100, self.WIDTH + 110, self.HEIGHT, BG)
+        create_mask(self.TOP, self.LEFT_1 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG)
+        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10, self.WIDTH - self.MARGIN + 10, self.MARGIN, BG)
 
         for n in range(len(self.data[self.num_model])):
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.data[self.num_model][n]]
@@ -559,8 +567,6 @@ class Graphique(Thread):
             for x in range(len(pts) - 1):
                 pygame.draw.line(self.screen, self.color_data[n], pts[x], pts[x + 1], 2)
 
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.MARGIN - 10 + self.TOP),
-                        (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP), 2)
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
                         (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT+ self.TOP), 2)
 
@@ -573,17 +579,6 @@ class Graphique(Thread):
                             (self.LEFT_1 + X, self.DHAUT + self.TOP), 2)
             self.screen.blit(data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP))
 
-        x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
-        for x in x_coord:
-            form = "{:.2e}".format(int(x))
-            w = data_font.size(form)[0]
-            Y = self.HAUT - int(x * dx)
-            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
-                            (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
-            self.screen.blit(
-                data_font.render(form, True, FG),
-                ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
-
 
     def display_world(self):
         """ Affiche le graphique du monde
@@ -595,7 +590,9 @@ class Graphique(Thread):
         dx = self.H / mx
         dy = self.W / my
 
-        create_mask(self.TOP, self.LEFT_2 - 100, self.WIDTH + 150, self.HEIGHT, BG)
+        create_mask(self.TOP, self.LEFT_2 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG)
+        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 10,
+                    self.WIDTH - self.MARGIN + 10, self.MARGIN, BG)
 
         for n in range(len(self.world_data)):
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.world_data[n]]
@@ -603,11 +600,6 @@ class Graphique(Thread):
             pts = list(zip(c_y, c_x))
             for x in range(len(pts) - 1):
                 pygame.draw.line(self.screen, self.color_data[n], pts[x], pts[x + 1], 2)
-
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
-                        (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP),
-                        (self.WIDTH - self.MARGIN + 10 + self.LEFT_2, self.HAUT+ self.TOP), 2)
 
         y_coord = self.get_scale_value(0, my, 10)
         for y in y_coord:
@@ -618,16 +610,8 @@ class Graphique(Thread):
                             (self.LEFT_2 + X, self.DHAUT + self.TOP), 2)
             self.screen.blit(data_font.render(d, True, FG), (self.LEFT_2 + X - w // 2 + 7, self.DHAUT + self.TOP))
 
-        x_coord = self.get_scale_value(0, self.N, 10)
-        for x in x_coord:
-            form = "{:.2e}".format(int(x))
-            w = data_font.size(form)[0]
-            Y = self.HAUT - int(x * dx)
-            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, Y + self.TOP),
-                            (self.MARGIN - 5 + self.LEFT_2, Y + self.TOP), 2)
-            self.screen.blit(
-                data_font.render(form, True, FG),
-                ((self.MARGIN - w) + self.LEFT_2 - 10, Y - 10 + self.TOP))
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP),
+                         (self.WIDTH - self.MARGIN + 10 + self.LEFT_2, self.HAUT + self.TOP), 2)
 
 
     def update(self):
@@ -640,11 +624,10 @@ class Graphique(Thread):
         create_mask(0, 1550, 400, 120, BG)
         blit_text(screen, model.country.name, (1600, 30), 60, 300, 80)
         center_text(screen, data_font, "{:.2e}".format(model.N), FG, 300, 50, 160, 1600)
-        delta = 330 / (N - 1)
-        x = 0
+        x = 1
         for key in model.param_dict:
             center_text(screen, data_font, "{:.2e}".format(
-                int(model.param_dict[key]['value'] * model.N)), FG, 300, 50, 240 + delta * x, 1600)
+                int(model.param_dict[key]['value'] * model.N)), FG, 300, 40, 175 + self.DELTA * x, 1600)
             x += 1
         create_mask(30, 10, 1540, 620, BG)
         border = get_scale(model.country, 1500, 500, 50, 20)
@@ -672,11 +655,10 @@ class Graphique(Thread):
         update_mask(n)
         model = self.models[self.num_model]
         center_text(screen, data_font, "{:.2e}".format(model.N), FG, 300, 50, 160, 1600)
-        w = 330 / (n - 1)
-        x = 0
+        x = 1
         for key in model.param_dict:
             center_text(screen, data_font,
-                        "{:.2e}".format(int(model.param_dict[key]['value'] * model.N)), FG, 300, 50, 240 + w * x, 1600)
+                        "{:.2e}".format(int(model.param_dict[key]['value'] * model.N)), FG, 300, 40, 175 + self.DELTA * x, 1600)
             x += 1
 
 
@@ -687,11 +669,10 @@ class Graphique(Thread):
         n = len(self.world_data)
         update_mask(n)
         center_text(screen, data_font, "{:.2e}".format(self.N), FG, 300, 50, 160, 1600)
-        w = 330 / (n - 1)
-        x = 0
+        x = 1
         for key in self.world_data:
             center_text(screen, data_font,
-                        "{:.2e}".format(int(key[-1])), FG, 300, 50, 240 + w * x, 1600)
+                        "{:.2e}".format(int(key[-1])), FG, 300, 40, 175 + self.DELTA * x, 1600)
             x += 1
 
 
@@ -731,12 +712,55 @@ class Graphique(Thread):
         return x, y
 
 
+    def init_affichage(self):
+        ## Init info fenêtre
+
+        x = 1
+        for key in self.ex_param:
+            pygame.draw.line(
+                self.screen, self.ex_param[key]['color'],
+                (1700, 175 + self.DELTA * x),
+                (1800, 175 + self.DELTA * x),
+                2)
+            center_text(screen, font, key, FG, 300, 50, 130 + self.DELTA * x, 1600)
+            x += 1
+
+        center_text(
+            self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
+            650, self.LEFT_1)
+
+        # Echelle du monde
+        mx = max([max(x) for x in self.world_data])
+        dx = self.H / mx
+
+        # Droites du graphique
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
+                         (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
+
+        x_coord = self.get_scale_value(0, self.N, 10)
+        for x in x_coord:
+            form = "{:.2e}".format(int(x))
+            w = data_font.size(form)[0]
+            Y = self.HAUT - int(x * dx)
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, Y + self.TOP),
+                             (self.MARGIN - 5 + self.LEFT_2, Y + self.TOP), 2)
+            self.screen.blit(
+                data_font.render(form, True, FG),
+                ((self.MARGIN - w) + self.LEFT_2 - 10, Y - 10 + self.TOP))
+
+        # Pays
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.MARGIN - 10 + self.TOP),
+                         (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP), 2)
+
+
     def run(self):
         """ Lance la simulation et l'affichage du graphique
         ---
         """
-        self.tbm.save_model_param()
+        if not self.use_db:
+            self.tbm.save_model_param()
         x = 0
+        self.init_affichage()
         self.gen_data(x)
         for _ in range(self.nb_iterations[self.num_model]):
             x += 1
@@ -750,6 +774,7 @@ class Graphique(Thread):
             if len(self.data[self.num_model][0]) >= 2:
                 self.display_graph(1)
                 self.display_graph(2)
+        self.tbm.end()
 
 
 data = json.load(open("Country.json"))
@@ -779,6 +804,9 @@ zoomed = False
 on_world = True
 
 
+USE_DB = True
+
+
 screen.fill(BG)
 screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 0))
 screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
@@ -789,13 +817,13 @@ models, c_name, c_bound, c_tag = [], [], [], []
 x = 0
 for c in countries:
     c.show()
-    models.append(SIRM(c, int(x == num_country), 0.5, 12, 0.05, 150))
+    models.append(SIRM(c, 1, 0.5, 12, 0.05, 150, USE_DB))
     c_name.append(c.name)
     c_bound.append(c.bound)
     c_tag.append(c.tag)
     x += 1
 
-graph = Graphique(screen, models)
+graph = Graphique(screen, models, USE_DB)
 graph.update_world()
 graph.change_countries(num_country)
 graph.start()
@@ -847,6 +875,5 @@ while True:
 
 
 # TODO:
-#       - adapter hauteur en f° nb param
-#       - load sim from data
+#       - save juste 1 er jour avec I = 0
 #       - Alexis pls help
