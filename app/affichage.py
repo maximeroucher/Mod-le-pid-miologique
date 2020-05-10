@@ -2,6 +2,7 @@ import json
 import os
 import random
 import time
+import tkinter
 from threading import Thread
 
 # Mute l'import de pygame
@@ -161,7 +162,6 @@ def to_json(liste):
         - list(dist) liste des dictionnaires des pays
     """
     return [x.to_json() for x in liste]
-
 
 
 ### Affichage
@@ -372,9 +372,10 @@ class Pays:
         return {self.tag: {"NAME_FR": self.name, "POP_EST": self.pop, "GDP_MD_EST": self.pib, "geometry": self.border, "bounds": self.bound}}
 
 
-class Graphique(Thread):
 
-    def __init__(self, screen, models, use_db):
+class MainThread(Thread):
+
+    def __init__(self, screen, countries):
         """ Initialisation d'un graphique
         ---
         param :
@@ -390,47 +391,15 @@ class Graphique(Thread):
 
         ## Manager de base de donnée
 
-        self.use_db = use_db
-        self.tbm = TableManager("Test", models, not self.use_db)
+        self.use_db = None
+        self.param = []
+        self.tbm = TableManager(countries)
 
 
         ## Surface
 
         self.screen = screen
         self.need_mask = False
-
-
-        ## Modèles
-
-        self.models = models
-        self.ex_param = self.models[0].param_dict
-        self.nb_param = len(self.ex_param)
-        self.keys = list(self.ex_param.keys())
-        self.N = 0
-        self.data = []
-        for model in self.models:
-            # Vérifie les attributs nécessaires du modèle
-            assert hasattr(model, 'update')
-            assert hasattr(model, 'param_dict')
-            assert hasattr(model, 'nb_iterations')
-            assert hasattr(model, 'N')
-            self.N += model.N
-            self.data.append([[model.param_dict[key]["value"] * model.N] for key in self.keys])
-
-        self.y = [0]
-        self.num_model = 0
-
-        self.world_data = [[0] for _ in range(self.nb_param)]
-        for x in range(len(data)):
-            for n in range(self.nb_param):
-                self.world_data[n][0] += self.data[x][n][0]
-        self.color_data = [model.param_dict[x]["color"] for x in self.ex_param]
-
-        if self.use_db:
-            max_length = self.tbm.sim_length() - 1
-            self.nb_iterations = [min(model.nb_iterations, max_length) for model in self.models]
-        else:
-            self.nb_iterations = [model.nb_iterations for model in self.models]
 
 
         ## Constantes
@@ -465,7 +434,8 @@ class Graphique(Thread):
         self.COEF_HEIGHT = 1.189 / self.HEIGHT
         # Coordonnées du graphique mondial
         self.WORLD_GRAPH_BOUND = (self.LEFT_2 + self.MARGIN, self.TOP + self.HAUT, self.LEFT_2 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
-        self.DELTA = 750 / self.nb_param
+
+        self.ready = False
 
 
     def gen_data(self, day):
@@ -496,10 +466,10 @@ class Graphique(Thread):
         """
         assert n <= len(self.models)
         self.num_model = n
-        create_mask(650, self.LEFT_1, self.WIDTH, 30, BG)
+        create_mask(650, self.LEFT_1 - 5, self.WIDTH, 30, BG)
         center_text(
             self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
-            650, self.LEFT_1)
+            650, self.LEFT_1 - 5)
         if len(self.data[self.num_model][0]) >= 2:
             self.display_graph(1)
         create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG)
@@ -590,7 +560,7 @@ class Graphique(Thread):
         dx = self.H / mx
         dy = self.W / my
 
-        create_mask(self.TOP, self.LEFT_2 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG)
+        create_mask(self.TOP + self.MARGIN, self.LEFT_2 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - 2 * self.MARGIN, BG)
         create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 10,
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG)
 
@@ -680,39 +650,43 @@ class Graphique(Thread):
         """ Affiche les valeurs du graphique à la position de la souris
         ---
         """
-        # Si un masque doit être créé pour réécrire les valeur au point de la souris
-        if self.need_mask:
-            create_mask(600, 10, 150, 70, BG)
-            self.need_mask = False
+        if self.ready:
+            # Si un masque doit être créé pour réécrire les valeur au point de la souris
+            if self.need_mask:
+                create_mask(600, 10, 150, 70, BG)
+                self.need_mask = False
 
-        x, y = pygame.mouse.get_pos()
-         # Si la souris est sur le graphique pays
-        if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
-            center_text(
-                screen, data_font,
-                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(graph.world_data[0]))}",
-                FG, 150, 50, 600, 15)
-            center_text(
-                screen, data_font, "y : {:.2e}".format(
-                    int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * graph.models[graph.num_model].N)),
-                FG, 150, 50, 630, 15)
-            self.need_mask = True
+            x, y = pygame.mouse.get_pos()
+            # Si la souris est sur le graphique pays
+            if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
+                center_text(
+                    screen, data_font,
+                    f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(graph.world_data[0]))}",
+                    FG, 150, 50, 600, 15)
+                center_text(
+                    screen, data_font, "y : {:.2e}".format(
+                        int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * graph.models[graph.num_model].N)),
+                    FG, 150, 50, 630, 15)
+                self.need_mask = True
 
-        # Si la souris est sur le graphique mondial
-        elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
-            center_text(
-                self.screen, data_font,
-                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
-                FG, 150, 50, 600, 15)
-            center_text(
-                self.screen, data_font, "y : {:.2e}".format(
-                    int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
-                FG, 150, 50, 630, 15)
-            self.need_mask = True
-        return x, y
+            # Si la souris est sur le graphique mondial
+            elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
+                center_text(
+                    self.screen, data_font,
+                    f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
+                    FG, 150, 50, 600, 15)
+                center_text(
+                    self.screen, data_font, "y : {:.2e}".format(
+                        int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
+                    FG, 150, 50, 630, 15)
+                self.need_mask = True
+            return x, y
 
 
     def init_affichage(self):
+        """ Affiche les paramètres de la simulation
+        ---
+        """
         ## Init info fenêtre
 
         x = 1
@@ -727,7 +701,7 @@ class Graphique(Thread):
 
         center_text(
             self.screen, font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
-            650, self.LEFT_1)
+            650, self.LEFT_1 - 5)
 
         # Echelle du monde
         mx = max([max(x) for x in self.world_data])
@@ -753,16 +727,52 @@ class Graphique(Thread):
                          (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP), 2)
 
 
+    def init_model(self):
+        """ Initialise les paramètres d'affichage
+        ---
+        """
+        self.ex_param = self.models[0].param_dict
+        self.nb_param = len(self.ex_param)
+        self.keys = list(self.ex_param.keys())
+        self.N = 0
+        self.data = []
+        for model in self.models:
+            self.N += model.N
+            self.data.append([[model.param_dict[key]["value"] * model.N] for key in self.keys])
+        self.y = [0]
+        self.num_model = 0
+        self.world_data = [[0] for _ in range(self.nb_param)]
+        for x in range(len(self.data)):
+            for n in range(self.nb_param):
+                self.world_data[n][0] += self.data[x][n][0]
+        self.color_data = [model.param_dict[x]["color"] for x in self.ex_param]
+
+        self.nb_iterations = [model.nb_iterations for model in self.models]
+        self.DELTA = 750 / self.nb_param
+
+
     def run(self):
         """ Lance la simulation et l'affichage du graphique
         ---
         """
+        # Affiche les pays
+        for c in self.tbm.countries:
+            c.show()
+        # Affiche mes textes
+        center_text(screen, font, "Evolution mondiale", FG, 700, 50, 650, 100)
+        center_text(screen, font, "Population de départ", FG, 300, 50, 130, 1600)
+        screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 0))
+        # Récupère les modèles et initialise la simulatio
+        self.models = self.tbm.models
+        self.init_model()
+        self.update_world()
+        self.change_countries(num_country)
         if not self.use_db:
             self.tbm.save_model_param()
         x = 0
         self.init_affichage()
         self.gen_data(x)
-        for _ in range(self.nb_iterations[self.num_model]):
+        for _ in range(int(self.nb_iterations[self.num_model])):
             x += 1
             self.y.append(len(self.y))
             self.gen_data(x)
@@ -777,8 +787,88 @@ class Graphique(Thread):
         self.tbm.end()
 
 
-data = json.load(open("Country.json"))
-countries = from_json(data)
+class Menu:
+
+    def __init__(self):
+        """ Fenêtre de menu
+        ---
+        """
+        self.use_db = None
+        self.param = []
+
+
+    def select(self, b):
+        """ Au clic d'un des deux boutons "Base de donnée" / "Paramètres"
+        ---
+        param :
+
+            - b (bool) True utilise une base de donnée / False utilise des paramètres
+        """
+        # Renseigne la valeur et détruit la fenêtre
+        self.use_db = b
+        self.fen.destroy()
+        self.fen.quit()
+        # Action en fonction de la valeur
+        if not self.use_db:
+            self.ask_param()
+
+
+    def ask_use_db(self):
+        """ Ouvre la fenêtre de demande d'initialisation de la simulation
+        ---
+        """
+        self.fen = tkinter.Tk()
+        self.fen.geometry("300x150")
+        self.fen.configure(bg="#36393f")
+        self.fen.title("Initialisation")
+
+        label = tkinter.Label(self.fen, text="Comment initialiser la simulation ?")
+        label.configure(bg="#36393f", fg="#B6B9BE")
+        label.place(x=50, y=20)
+
+        bdd_btn = tkinter.Button(self.fen, text="Base de donnée", command=lambda : self.select(True))
+        bdd_btn.configure(bg="#202225", fg="#B6B9BE", activebackground="#40444B",
+                        activeforeground="#b6b9be",  borderwidth=0, highlightthickness=0)
+        bdd_btn.place(x=30, y=80)
+
+        param_btn = tkinter.Button(self.fen, text="Paramètre", command=lambda: self.select(False))
+        param_btn.configure(bg="#202225", fg="#B6B9BE", activebackground="#40444B",
+                        activeforeground="#b6b9be",  borderwidth=0, highlightthickness=0)
+        param_btn.place(x=180, y=80)
+
+        self.fen.mainloop()
+
+
+    def get_param(self):
+        """ Récupère les paramètres de la fenêtre des paramètres
+        ---
+        """
+        self.param = []
+
+
+    def on_close(self):
+        """ A la fermeture de la fenêtre des paramètres
+        ---
+        """
+        self.fen2.destroy()
+        if self.param == []:
+            self.ask_use_db()
+
+
+    def ask_param(self):
+        """ Ouvre la fenêtre des paramètres
+        ---
+        """
+        self.fen2 = tkinter.Tk()
+        self.fen2.geometry("800x500")
+        self.fen2.configure(bg="#36393f")
+        self.fen2.title("Paramètres de simulation")
+        self.fen2.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.fen2.mainloop()
+
+
+countries = from_json(json.load(open("Country.json")))
+
 
 pygame.init()
 
@@ -787,12 +877,13 @@ back_arrow = pygame.transform.scale(pygame.image.load("left-arrow.png"), (50, 50
 
 # Font
 font = pygame.font.SysFont("montserrat", 24)
-title_font = pygame.font.SysFont("montserrat", 44)
 data_font = pygame.font.SysFont("montserrat", 18)
+title_font = pygame.font.SysFont("montserrat", 44)
 
 # Init fenêtre
 info = pygame.display.Info()
-screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
+# Fenêtre de 1x1 juste pour initialiser le thread
+screen = pygame.display.set_mode((1, 1), pygame.NOFRAME)
 
 # Horloge
 clock = pygame.time.Clock()
@@ -803,29 +894,33 @@ changed = False
 zoomed = False
 on_world = True
 
+# TODO:
+num_country = 139
+# Liste des tag des pays
+c_tag = [c.tag for c in countries]
 
-USE_DB = True
+# Le Thread principale
+graph = MainThread(screen, countries)
 
+# Les fenêtres de menu
+menu = Menu()
+menu.ask_use_db()
+graph.use_db = menu.use_db
+if menu.use_db == None:
+    quit()
+elif menu.use_db:
+    graph.tbm.connect()
+    graph.tbm.extract_model_from_db()
+else:
+    graph.tbm.create_db(menu.param)
+    graph.tbm.init_model()
 
+# Redimensionne la fenêtre
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
+graph.screen = screen
 screen.fill(BG)
-screen.blit(font.render("Simulation d'une épidémie de ...", True, FG), (20, 0))
-screen.blit(font.render("Evolution mondiale", True, FG), (400, 650))
-center_text(screen, font, "Population de départ", FG, 300, 50, 130, 1600)
 
-num_country = 139 # Test Chine (pour voir effet s/ monde)
-models, c_name, c_bound, c_tag = [], [], [], []
-x = 0
-for c in countries:
-    c.show()
-    models.append(SIRM(c, 1, 0.5, 12, 0.05, 150, USE_DB))
-    c_name.append(c.name)
-    c_bound.append(c.bound)
-    c_tag.append(c.tag)
-    x += 1
-
-graph = Graphique(screen, models, USE_DB)
-graph.update_world()
-graph.change_countries(num_country)
+# Lance les graphiques
 graph.start()
 
 
@@ -837,35 +932,37 @@ while True:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             quit()
 
-        x, y = graph.graph_value()
+        h = graph.graph_value()
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == LEFT:
-            if not zoomed:
-                if in_rect((40, 650, 1550, 0), x, y):
-                    for c in countries:
-                        for cb in c.bound:
-                            if in_rect(cb, x, y):
-                                for b in c.border:
-                                    if in_poly((x, y), b):
-                                        n = c_tag.index(c.tag)
-                                        if num_country != n:
-                                            num_country = n
-                                            graph.change_countries(num_country)
-                                        changed = zoomed = True
-                                        on_world = False
-                                        break
+            if h:
+                x, y = h
+                if not zoomed:
+                    if in_rect((40, 650, 1550, 0), x, y):
+                        for c in countries:
+                            for cb in c.bound:
+                                if in_rect(cb, x, y):
+                                    for b in c.border:
+                                        if in_poly((x, y), b):
+                                            n = c_tag.index(c.tag)
+                                            if num_country != n:
+                                                num_country = n
+                                                graph.change_countries(num_country)
+                                            changed = zoomed = True
+                                            on_world = False
+                                            break
 
-                    else:
-                        if not on_world:
-                            graph.update_world()
-                            on_world = True
+                        else:
+                            if not on_world:
+                                graph.update_world()
+                                on_world = True
 
-            else:
-                if in_rect(BTN_BOUND, x, y):
-                    zoomed = on_world = False
-                    create_mask(30, 10, 1540, 620, BG)
-                    for c in countries:
-                        c.show()
+                else:
+                    if in_rect(BTN_BOUND, x, y):
+                        zoomed = on_world = False
+                        create_mask(30, 10, 1540, 620, BG)
+                        for c in countries:
+                            c.show()
 
     if changed:
         changed = False
@@ -875,5 +972,4 @@ while True:
 
 
 # TODO:
-#       - save juste 1 er jour avec I = 0
 #       - Alexis pls help

@@ -1,10 +1,14 @@
+from __future__ import print_function
+
 import os
 import sqlite3
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
-import pygame
+
 import easygui
+import pygame
+from tkinter import messagebox
 
 
 
@@ -25,6 +29,7 @@ class SIR:
         self.use_db = use_db
         self.country = country
         self.N = self.country.pop
+        self.pop_tot = self.N
         self.N0 = N0
         self.S = (self.N - self.N0) / self.N
         self.I = N0 / self.N
@@ -39,7 +44,7 @@ class SIR:
                            {"value": self.I, "color": (198, 96, 55)},
                            "Rétablis":
                            {"value": self.R, "color": (77, 94, 118)}
-                            }
+                          }
 
 
     def update(self, tbm, jour):
@@ -58,7 +63,6 @@ class SIR:
             self.S += dS
             self.I += dI
             self.R += dR
-            self.pop_tot = self.S + self.I + self.R
             self.update_param_dict()
 
 
@@ -90,7 +94,7 @@ class SIR:
 
 class SIRM:
 
-    def __init__(self, country, N0, transm, tp, l, nb_iterations, use_db):
+    def __init__(self, country, N0, transm, l, tp, nb_iterations, use_db):
         """ Simulation selon le modèle SIR avec l'ajout de la léthalité de la maladie
         ---
         param :
@@ -244,38 +248,16 @@ class Event:
 
 class TableManager:
 
-    def __init__(self, name, models, overwrite):
+    def __init__(self, countries):
         """ Gestionnaire de base de donnée pour sauvegarder les données de la simulation
         ---
         param :
 
             - name (str) le nom de la base de donnée
             - models list(ModeleCompartimental) la liste des modèles de la simulation
-            - overwrite (bool) supprimer le fichier déjà existant
         """
-        self.models = models
-        self.keys = [s for s in self.models[0].param_dict]
-        self.formated_keys = [x.replace(" ", "_") for x in self.keys]
-        self.data_base_name = name
-
-        # Création / Connection à la base de donnée
-        filename = f"{self.data_base_name}.db"
-        filepath = f"./{filename}"
-        if overwrite or (not filename in os.listdir()):
-            open(filepath, 'w').close()
-        self.data_base = sqlite3.connect(filepath, check_same_thread=False)
-        self.cursor = self.data_base.cursor()
-        self.tables = [x[0] for x in self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
-        self.ctables = self.tables
-        if len(self.tables) == 0:
-            self.is_empty = True
-            tables_keys = ", ".join([f"{x.replace(' ', '_')} integer" for x in [x for x in self.models[0].param_dict]])
-            for model in self.models:
-                self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {model.country.tag} (id integer PRIMARY KEY, {tables_keys})""")
-            self.data_base.commit()
-        else:
-            assert self.check_bd_valid()
-            self.is_empty = False
+        self.countries = countries
+        self.connected = False
 
 
     def check_bd_valid(self):
@@ -301,6 +283,9 @@ class TableManager:
 
 
     def sim_length(self):
+        """ Retourne la longueur des paramètres de la simulation
+        ---
+        """
         return self.cursor.execute(f"""SELECT COUNT(*) FROM {self.ctables[0]}""").fetchone()[0]
 
 
@@ -319,6 +304,7 @@ class TableManager:
 
     def get_CI(self):
         """ Récupère les conditons initiales de la simulation enregistrée
+        ---
         """
         return self.cursor.execute("""Select * from Conditions_initiales """).fetchone()
 
@@ -349,10 +335,24 @@ class TableManager:
             - jour (int) le numéro du jour
         """
         for model in self.models:
-            if model.I != 0:
-                v = [int(model.param_dict[x]["value"] * model.N) for x in self.keys]
-                self.cursor.execute(f"""INSERT INTO {model.country.tag} {tuple(self.formated_keys)} VALUES {tuple(v)}""")
+            v = [int(model.param_dict[x]["value"] * model.N) for x in self.keys]
+            self.cursor.execute(f"""INSERT INTO {model.country.tag} {tuple(self.formated_keys)} VALUES {tuple(v)}""")
         self.data_base.commit()
+
+
+    def init_db(self):
+        """ Créer la base de donnée si elle est vide
+        ---
+        """
+        if len(self.tables) == 0:
+            self.is_empty = True
+            tables_keys = ", ".join([f"{x.replace(' ', '_')} integer" for x in [x for x in self.models[0].param_dict]])
+            for model in self.models:
+                self.cursor.execute(
+                    f"""CREATE TABLE IF NOT EXISTS {model.country.tag} (id integer PRIMARY KEY, {tables_keys})""")
+            self.data_base.commit()
+        else:
+            self.is_empty = False
 
 
     def end(self):
@@ -360,6 +360,71 @@ class TableManager:
         ---
         """
         self.data_base.close()
+
+
+    def connect(self):
+        """ Demande et se connecte à la base de donnée
+        ---
+        """
+        f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
+        if f:
+            if not f.endswith(".db"):
+                messagebox.showerror("Erreur", "L'extension du fichier n'est pas correcte")
+            else:
+                self.data_base = sqlite3.connect(f, check_same_thread=False)
+                self.cursor = self.data_base.cursor()
+                self.tables = [x[0] for x in self.cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+                self.ctables = self.tables
+                if not self.check_bd_valid():
+                    self.end()
+                    messagebox.showerror("Erreur", "Le fichier ne peut pas être lu")
+                else:
+                    self.connected = True
+
+
+    def extract_model_from_db(self):
+        """ Décode le model en fonction de la base donnée
+        ---
+        """
+        ci = self.get_CI()[2:]
+        comps = [x[1] for x in self.cursor.execute(f"PRAGMA table_info({self.ctables[0]});").fetchall()[1:]]
+        sirm_comp = ["Sains", "Infectés", "Rétablis", "Morts", "Population_totale"]
+        sir_comp = ["Sains", "Infectés", "Rétablis"]
+        self.models = []
+        if comps == sirm_comp:
+            for c in self.countries:
+                self.models.append(SIRM(c, *ci, True))
+        else:
+            for c in self.countries:
+                self.models.append(SIR(c, *ci, True))
+        self.keys = [s for s in self.models[0].param_dict]
+        self.formated_keys = [x.replace(" ", "_") for x in self.keys]
+
+
+    def init_model(self, param, model):
+        """ Initialise les modelès en fonction des paramètres donnés
+        ---
+        """
+        self.models = [model(c, *param, False) for c in self.countries]
+        self.keys = [s for s in self.models[0].param_dict]
+        self.formated_keys = [x.replace(" ", "_") for x in self.keys]
+
+
+    def create_db(self, param):
+        """ Créer une base de donnée pour enregistrer les résultats de la simulation
+        ---
+        """
+        try:
+            path, filename = param[0], param[1]
+            path = os.path.join(path, filename)
+            if not filename in os.listdir(path):
+                open(path, 'w').close()
+            self.data_base = sqlite3.connect(path, check_same_thread=False)
+            self.cursor = self.data_base.cursor() # Récup table
+            self.connected = True
+        except:
+            pass
 
 
 
@@ -376,13 +441,8 @@ class Country_Test:
 
 # Test
 if __name__ == "__main__":
-    test = Country_Test(1379302770, 'test', "TST")
-    sirm = SIRM(test, 1, .5, 6, .9, 100, True)
-    tab = TableManager("Test", [sirm], False)
-    sirm.update(tab, 5)
-    """ f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
-    if f:
-        if not f.endswith(".db"):
-            easygui.msgbox("L'extension du fichier n'est pas correcte")
-        else:
-            print(f) """
+    test = Country_Test(1379302770, 'Chine', "CHN")
+    tab = TableManager([test], False)
+    tab.connect()
+    tab.init_model([1, 0.5, 0.05, 12, 150], SIRM)
+
