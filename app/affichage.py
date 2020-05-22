@@ -2,7 +2,8 @@ import json
 import os
 import random
 import time
-import tkinter
+from tkinter import *
+from tkinter import ttk
 from threading import Thread
 
 # Mute l'import de pygame
@@ -10,7 +11,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
 # Postionne la fenêtre de l'application
 os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
-import geopandas as gpd
+#import geopandas as gpd
 import matplotlib.pyplot as plt
 import pygame
 import shapefile
@@ -27,14 +28,12 @@ FPS = 60
 LEFT = 1
 
 
-# Couleur de l'application
-
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
 # Couleur de fond
 BG = (32, 34, 37)
+HEXBG = "#36393f"
 # Couleur du texte, des axes des graphiques et des bords des pays
 FG = (182, 185, 190)
+HEXFG = "#B6B9BE"
 
 # Coordonnées du carré du bouton (l, b, r, t)
 BTN_BOUND = [40, 590, 110, 520]
@@ -286,7 +285,7 @@ def update_mask(n):
 
 # Redimensionnement
 
-def get_scale(country, w, h, t, l):  # TODO: rassembler les îles pour zommer encore +
+def get_scale(country, w, h, t, l):
     """ Calcule la redimension des bords du pays afin de le zoomer
     ---
     param :
@@ -372,6 +371,14 @@ class Pays:
         return {self.tag: {"NAME_FR": self.name, "POP_EST": self.pop, "GDP_MD_EST": self.pib, "geometry": self.border, "bounds": self.bound}}
 
 
+    def toggle_close(self):
+        self.r, self.b = self.b, self.r
+        self.swoh()
+
+
+    def __lt__(self, value):
+        return self.name < value.name
+
 
 class MainThread(Thread):
 
@@ -434,8 +441,6 @@ class MainThread(Thread):
         self.COEF_HEIGHT = 1.189 / self.HEIGHT
         # Coordonnées du graphique mondial
         self.WORLD_GRAPH_BOUND = (self.LEFT_2 + self.MARGIN, self.TOP + self.HAUT, self.LEFT_2 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
-
-        self.ready = False
 
 
     def gen_data(self, day):
@@ -650,37 +655,36 @@ class MainThread(Thread):
         """ Affiche les valeurs du graphique à la position de la souris
         ---
         """
-        if self.ready:
-            # Si un masque doit être créé pour réécrire les valeur au point de la souris
-            if self.need_mask:
-                create_mask(600, 10, 150, 70, BG)
-                self.need_mask = False
+        # Si un masque doit être créé pour réécrire les valeur au point de la souris
+        if self.need_mask:
+            create_mask(600, 10, 150, 70, BG)
+            self.need_mask = False
 
-            x, y = pygame.mouse.get_pos()
-            # Si la souris est sur le graphique pays
-            if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
-                center_text(
-                    screen, data_font,
-                    f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(graph.world_data[0]))}",
-                    FG, 150, 50, 600, 15)
-                center_text(
-                    screen, data_font, "y : {:.2e}".format(
-                        int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * graph.models[graph.num_model].N)),
-                    FG, 150, 50, 630, 15)
-                self.need_mask = True
+        x, y = pygame.mouse.get_pos()
+        # Si la souris est sur le graphique pays
+        if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
+            center_text(
+                screen, data_font,
+                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(graph.world_data[0]))}",
+                FG, 150, 50, 600, 15)
+            center_text(
+                screen, data_font, "y : {:.2e}".format(
+                    int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * graph.models[graph.num_model].N)),
+                FG, 150, 50, 630, 15)
+            self.need_mask = True
 
-            # Si la souris est sur le graphique mondial
-            elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
-                center_text(
-                    self.screen, data_font,
-                    f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
-                    FG, 150, 50, 600, 15)
-                center_text(
-                    self.screen, data_font, "y : {:.2e}".format(
-                        int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
-                    FG, 150, 50, 630, 15)
-                self.need_mask = True
-            return x, y
+        # Si la souris est sur le graphique mondial
+        elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
+            center_text(
+                self.screen, data_font,
+                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
+                FG, 150, 50, 600, 15)
+            center_text(
+                self.screen, data_font, "y : {:.2e}".format(
+                    int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
+                FG, 150, 50, 630, 15)
+            self.need_mask = True
+        return x, y
 
 
     def init_affichage(self):
@@ -787,6 +791,56 @@ class MainThread(Thread):
         self.tbm.end()
 
 
+class ScrollableFrame(Frame):
+
+    def __init__(self, fen, *args, **kwargs):
+        """ Frame mobile  liée à la molette de la souris
+        ---
+        """
+        super().__init__(fen, *args, **kwargs)
+
+        self.canvas = Canvas(self, width=228, height=160, bg=HEXBG, borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(
+                scrollregion=self.canvas.bbox("all")
+            )
+        )
+
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack()
+        scrollbar.pack_forget()
+        self.bind('<Enter>', self.mouse_wheel_bind)
+        self.bind('<Leave>', self.mouse_wheel_unbind)
+
+
+    def mouse_wheel_bind(self, event):
+        """ Créer le lien de la molette avec self.mousewheel
+        ---
+        """
+        self.canvas.bind_all("<MouseWheel>", self.mouse_wheel)
+
+
+    def mouse_wheel_unbind(self, event):
+        """ Supprime le lien de la molette avec self.mousewheel
+        ---
+        """
+        self.canvas.unbind_all("<MouseWheel>")
+
+
+    def mouse_wheel(self, event):
+        """ Déplace la frame avec la molette
+        """
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
 class Menu:
 
     def __init__(self):
@@ -795,6 +849,8 @@ class Menu:
         """
         self.use_db = None
         self.param = []
+        self.event_list = []
+        self.start_c = 0
 
 
     def select(self, b):
@@ -817,25 +873,27 @@ class Menu:
         """ Ouvre la fenêtre de demande d'initialisation de la simulation
         ---
         """
-        self.fen = tkinter.Tk()
+        self.fen = Tk()
         self.fen.geometry("300x150")
-        self.fen.configure(bg="#36393f")
+        self.fen.minsize(300, 150)
+        self.fen.configure(bg=HEXBG)
         self.fen.title("Initialisation")
 
-        label = tkinter.Label(self.fen, text="Comment initialiser la simulation ?")
-        label.configure(bg="#36393f", fg="#B6B9BE")
-        label.place(x=50, y=20)
+        label = Label(self.fen, text="Comment initialiser la simulation ?")
+        label.configure(bg=HEXBG, fg=HEXFG)
+        label.place(x=50, y=30)
 
-        bdd_btn = tkinter.Button(self.fen, text="Base de donnée", command=lambda : self.select(True))
-        bdd_btn.configure(bg="#202225", fg="#B6B9BE", activebackground="#40444B",
-                        activeforeground="#b6b9be",  borderwidth=0, highlightthickness=0)
+        bdd_btn = Button(self.fen, text="Base de donnée", command=lambda: self.select(True))
+        bdd_btn.configure(bg="#202225", fg=HEXFG, activebackground="#40444B",
+                        activeforeground=HEXFG,  borderwidth=0, highlightthickness=0)
         bdd_btn.place(x=30, y=80)
 
-        param_btn = tkinter.Button(self.fen, text="Paramètre", command=lambda: self.select(False))
-        param_btn.configure(bg="#202225", fg="#B6B9BE", activebackground="#40444B",
-                        activeforeground="#b6b9be",  borderwidth=0, highlightthickness=0)
+        param_btn = Button(self.fen, text="Paramètre", command=lambda: self.select(False))
+        param_btn.configure(bg="#202225", fg=HEXFG, activebackground="#40444B",
+                        activeforeground=HEXFG,  borderwidth=0, highlightthickness=0)
         param_btn.place(x=180, y=80)
 
+        self.fen.focus_force()
         self.fen.mainloop()
 
 
@@ -843,32 +901,83 @@ class Menu:
         """ Récupère les paramètres de la fenêtre des paramètres
         ---
         """
-        self.param = []
+        self.start_c = self.list_start_box.curselection()[0]
 
 
     def on_close(self):
         """ A la fermeture de la fenêtre des paramètres
         ---
         """
+        self.get_param()
         self.fen2.destroy()
         if self.param == []:
             self.ask_use_db()
+
+
+    def add_event(self):
+        """ Ajoute un événement
+        ---
+        """
+        self.event_list.append("salut")
+        a = Label(self.event_frame.scrollable_frame, text="salut" + str(len(self.event_list)), width=10)
+        a.configure(fg=HEXFG, bg=HEXBG)
+        a.pack()
 
 
     def ask_param(self):
         """ Ouvre la fenêtre des paramètres
         ---
         """
-        self.fen2 = tkinter.Tk()
-        self.fen2.geometry("800x500")
-        self.fen2.configure(bg="#36393f")
+        self.fen2 = Tk()
+        self.fen2.minsize(800, 500)
+        self.fen2.configure(bg=HEXBG)
         self.fen2.title("Paramètres de simulation")
         self.fen2.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        self.lblf_event = LabelFrame(self.fen2, text=" Événements ", padx=10, pady=10)
+        self.lblf_event.configure(bg=HEXBG, fg=HEXFG)
+        self.lblf_event.place(x=520, y=20)
+
+        self.event_frame = ScrollableFrame(self.lblf_event)
+        self.event_frame.pack()
+
+        self.add_event_btn = Button(self.fen2, text="Ajouter un événement", command=self.add_event)
+        self.add_event_btn.configure(bg="#202225", fg=HEXFG, activebackground="#40444B", activeforeground=HEXFG, borderwidth=0, highlightthickness=0, width=20)
+        self.add_event_btn.place(x=570, y=240)
+
+
+        self.lblf_start = LabelFrame(self.fen2, text=" Pays d'origine de la pandémie ", padx=10, pady=10)
+        self.lblf_start.configure(bg=HEXBG, fg=HEXFG)
+        self.lblf_start.place(x=520, y=280)
+
+        self.list_start_box = Listbox(self.lblf_start, width=38, height=10)
+        self.list_start_box.configure(bg=HEXBG, fg=HEXFG, borderwidth=0, highlightthickness=0)
+        self.list_start_box.pack(side="left", fill="y")
+
+        self.scroll_start = Scrollbar(self.lblf_start, orient="vertical")
+        self.scroll_start.config(command=self.list_start_box.yview)
+        self.scroll_start.configure(bg="#202225", activebackground="#40444B", borderwidth=0, highlightthickness=0)
+        self.scroll_start.pack()
+        self.scroll_start.pack_forget()
+
+
+        self.list_start_box.config(yscrollcommand=self.scroll_start.set)
+
+        for x in range(len(countries)):
+            self.list_start_box.insert(END, countries[x].name)
+        self.list_start_box.select_set(0)
+
+
+        self.ok_btn = Button(self.fen2, text="OK", command=self.on_close)
+        self.ok_btn.configure(bg="#202225", fg=HEXFG, activebackground="#40444B", activeforeground=HEXFG,  borderwidth=0, highlightthickness=0, width=10)
+        self.ok_btn.place(x=380, y=450)
+
+        self.fen2.focus_force()
         self.fen2.mainloop()
 
 
 countries = from_json(json.load(open("Country.json")))
-
+countries.sort()
 
 pygame.init()
 
@@ -894,8 +1003,6 @@ changed = False
 zoomed = False
 on_world = True
 
-# TODO:
-num_country = 139
 # Liste des tag des pays
 c_tag = [c.tag for c in countries]
 
@@ -906,14 +1013,18 @@ graph = MainThread(screen, countries)
 menu = Menu()
 menu.ask_use_db()
 graph.use_db = menu.use_db
-if menu.use_db == None:
+num_country = menu.start_c
+try:
+    if menu.use_db == None:
+        quit()
+    elif menu.use_db:
+            graph.tbm.connect()
+            graph.tbm.extract_model_from_db()
+    else:
+            graph.tbm.create_db(menu.param)
+            graph.tbm.init_model()
+except:
     quit()
-elif menu.use_db:
-    graph.tbm.connect()
-    graph.tbm.extract_model_from_db()
-else:
-    graph.tbm.create_db(menu.param)
-    graph.tbm.init_model()
 
 # Redimensionne la fenêtre
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
@@ -972,4 +1083,11 @@ while True:
 
 
 # TODO:
+#       - fen param
+#       - modèle comp
+#       - event
+#       - estimation tps sim
+#       - countries.json -> sql
+#       - facteur évo°
 #       - Alexis pls help
+#       - opti zoom

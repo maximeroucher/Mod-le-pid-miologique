@@ -226,13 +226,16 @@ class Compartiment:
 
 class ModeleCompartimental:
 
-    def __init__(self, comp_list):
+    def __init__(self, country, N0, comp_list, nb_iterations):
         """ Initialisation d'un model compartimental
         ---
         param :
 
             - comp_list (list(Compartiment))
         """
+        self.country = country
+        self.N0 = N0
+        self.nb_iterations = nb_iterations
         self.param_dict = {comp.nom : {"value": comp.N, "color": comp.color} for comp in self.comp_dict}
 
 
@@ -441,8 +444,54 @@ class Country_Test:
 
 # Test
 if __name__ == "__main__":
-    test = Country_Test(1379302770, 'Chine', "CHN")
-    tab = TableManager([test], False)
-    tab.connect()
-    tab.init_model([1, 0.5, 0.05, 12, 150], SIRM)
+    HEXBG = "#36393f"
 
+    HEXFG = "#B6B9BE"
+    import pygame
+    import tkinter as tk
+    from tkinter import *
+    import os
+
+    fen = tk.Tk()
+    fen.attributes("-fullscreen", True)
+
+    def donothing():
+        filewin = Toplevel(fen)
+        button = Button(filewin, text="Do nothing button")
+        button.pack()
+
+    menubar = Menu(fen)
+    filemenu = Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="File", menu=filemenu)
+    filemenu.add_command(label="New", command=donothing)
+    filemenu.add_command(label="Open", command=donothing)
+    filemenu.add_command(label="Save", command=donothing)
+    filemenu.add_command(label="Save as...", command=donothing)
+    filemenu.add_command(label="Close", command=donothing)
+    filemenu.add_separator()
+    filemenu.add_command(label="Exit", command=fen.quit)
+
+    helpmenu = Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="Help", menu=helpmenu)
+    helpmenu.add_command(label="Help Index", command=donothing)
+    helpmenu.add_command(label="About...", command=donothing)
+
+    fen.config(menu=menubar, bg=HEXBG,  bd=0)
+
+    embed = tk.Frame(fen, width=fen.winfo_screenwidth(), height=fen.winfo_screenheight())
+    embed.pack(side=LEFT)  # packs window to the left
+    os.environ['SDL_WINDOWID'] = str(embed.winfo_id())
+    os.environ['SDL_VIDEODRIVER'] = 'windib'
+    screen = pygame.display.set_mode((fen.winfo_screenwidth(), fen.winfo_screenheight()), pygame.NOFRAME)
+    screen.fill(HEXBG)
+    pygame.display.init()
+    pygame.display.update()
+
+    while True:
+        for event in pygame.event.get():
+
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                quit()
+
+        pygame.display.update()
+        fen.update()
