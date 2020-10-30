@@ -1,8 +1,7 @@
-from __future__ import print_function
-
 import json
 import os
 import time
+import random
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
@@ -59,16 +58,12 @@ screen = pygame.display.set_mode((1, 1), pygame.NOFRAME)
 clock = pygame.time.Clock()
 
 
-global zoomed, on_world, num_country
 changed = False
-zoomed = False
-on_world = True
-num_country = 0
 # Liste des tag des pays
 c_tag = [c.tag for c in countries]
 
 # Le Thread principale
-graph = MainThread(screen, countries, c_tag, font, data_font, num_country, on_world, zoomed)
+graph = MainThread(screen, countries, c_tag, font, data_font, random.randint(0, len(c_tag)), True, False)
 
 # Les fenêtres de menu
 try:
@@ -107,9 +102,8 @@ while True:
                                     for b in c.border:
                                         if in_poly((x, y), b):
                                             n = c_tag.index(c.tag)
-                                            if num_country != n:
-                                                num_country = n
-                                                graph.change_countries(num_country)
+                                            if graph.num_country != n:
+                                                graph.change_countries(n)
                                             changed =  graph.zoomed = True
                                             graph.on_world = False
                                             break
@@ -137,3 +131,4 @@ while True:
 #       - régress° (vérif)
 #       - mettre date abscisse
 #       - estimation tps calcul
+#       - choisir les compartiments à afficher

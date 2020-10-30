@@ -8,15 +8,12 @@ from tkinter import messagebox
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
-# Postionne la fenêtre de l'application
-os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
 import easygui
 import pygame
 
-from tools import *
-
 from TableManager import CustomTableManager
+from tools import *
 
 
 # Couleur de fond
@@ -96,7 +93,7 @@ class MainThread(Thread):
         self.COUNTRY_GRAPH_BOUND = (self.LEFT_1 + self.MARGIN, self.TOP + self.HAUT,
                                     self.LEFT_1 + self.WIDTH - self.MARGIN, self.TOP + self.MARGIN)
         # Coefficient entre la largeur du graphique et sa valeur en ce point
-        self.COEF_WIDTH = 1.08 / self.WIDTH
+        self.COEF_WIDTH = 1.089 / self.WIDTH
         # Coefficient entre la hauteur du graphique et sa valeur en ce point
         self.COEF_HEIGHT = 1.189 / self.HEIGHT
         # Coordonnées du graphique mondial
@@ -114,18 +111,19 @@ class MainThread(Thread):
 
             - day (int) le jour de la simulation
         """
-        data = [0 for _ in range(self.nb_param)]
+        d = {key: 0 for key in self.keys}
         self.N = 0
         for n in range(len(self.models)):
             model = self.models[n]
             model.update(self.tbm, day + 1)
             for x in range(self.nb_param):
-                val = model.param_dict[self.keys[x]]["value"]
-                self.data[n][x].append(val)
-                data[x] += val
+                key = self.keys[x]
+                val = model.param_dict[key]["value"]
+                self.param_dict[n][key].append(val)
+                d[key] += val
             self.N += model.N
         for x in range(self.nb_param):
-            self.world_data[x].append(data[x])
+            self.world_param_dict[self.keys[x]].append(d[self.keys[x]])
 
 
     def change_countries(self, n):
@@ -137,27 +135,29 @@ class MainThread(Thread):
         """
         tag = self.c_tag[n]
         self.num_country = n
-        self.num_model = [n for n in range(len(self.models)) if self.models[n].country.tag == tag][0]
-        create_mask(650, self.LEFT_1 - 5, self.WIDTH, 30, BG, self.screen)
-        center_text(
-            self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
-            650, self.LEFT_1 - 5)
-        if len(self.data[self.num_model][0]) >= 2:
-            self.display_graph(1)
-        create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
-        create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
-        x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
-        mx = max([max(x) for x in self.data[self.num_model]])
-        dx = self.H / mx
-        for x in x_coord:
-            form = "{:.2e}".format(int(x))
-            w = self.data_font.size(form)[0]
-            Y = self.HAUT - int(x * dx)
-            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
-                             (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
-            self.screen.blit(
-                self.data_font.render(form, True, FG),
-                ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
+        a = [n for n in range(len(self.models)) if self.models[n].country.tag == tag]
+        if len(a) > 0:
+            self.num_model = a[0]
+            create_mask(650, self.LEFT_1 - 5, self.WIDTH, 30, BG, self.screen)
+            center_text(
+                self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
+                650, self.LEFT_1 - 5)
+            if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
+                self.display_graph(1)
+            create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+            create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
+            x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
+            mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
+            dx = self.H / mx
+            for x in x_coord:
+                form = "{:.2e}".format(int(x))
+                w = self.data_font.size(form)[0]
+                Y = self.HAUT - int(x * dx)
+                pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
+                                (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
+                self.screen.blit(
+                    self.data_font.render(form, True, FG),
+                    ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
 
 
     def get_scale_value(self, m, M, nb_pt):
@@ -198,7 +198,7 @@ class MainThread(Thread):
         """ Affiche le graphique du pays donné
         ---
         """
-        mx = max([max(x) for x in self.data[self.num_model]])
+        mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
         my = self.y[-1]
 
         dx = self.H / mx
@@ -208,12 +208,12 @@ class MainThread(Thread):
         create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10,
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
 
-        for n in range(len(self.data[self.num_model])):
-            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.data[self.num_model][n]]
+        for key in self.keys:
+            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.param_dict[self.num_model][key]]
             c_y = [x * dy + self.MARGIN + self.LEFT_1 for x in self.y]
             pts = list(zip(c_y, c_x))
             for x in range(len(pts) - 1):
-                pygame.draw.line(self.screen, self.color_data[n], pts[x], pts[x + 1], 2)
+                pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
 
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
                          (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT + self.TOP), 2)
@@ -232,7 +232,7 @@ class MainThread(Thread):
         """ Affiche le graphique du monde
         ---
         """
-        mx = max([max(x) for x in self.world_data])
+        mx = max([max(self.world_param_dict[x]) for x in self.keys])
         my = self.y[-1]
 
         dx = self.H / mx
@@ -243,12 +243,12 @@ class MainThread(Thread):
         create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 10,
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
 
-        for n in range(len(self.world_data)):
-            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.world_data[n]]
+        for key in self.keys:
+            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.world_param_dict[key]]
             c_y = [x * dy + self.MARGIN + self.LEFT_2 for x in self.y]
             pts = list(zip(c_y, c_x))
             for x in range(len(pts) - 1):
-                pygame.draw.line(self.screen, self.color_data[n], pts[x], pts[x + 1], 2)
+                pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
 
         y_coord = self.get_scale_value(0, my, 10)
         for y in y_coord:
@@ -271,8 +271,7 @@ class MainThread(Thread):
             - back_arrow (pygame.Image) la flèche de retour
         """
         model = self.models[self.num_model]
-        N = len(model.param_dict)
-        update_mask(N, self.screen)
+        update_mask(self.nb_param, self.screen)
         create_mask(0, 1550, 400, 120, BG, self.screen)
         blit_text(self.screen, model.country.name, (1600, 30), 60, 300, 80)
         center_text(self.screen, self.data_font, f"{model.N}", FG, 300, 50, 160, 1600)
@@ -303,8 +302,7 @@ class MainThread(Thread):
         """ Affiche les valeurs du pays sélétionnné
         ---
         """
-        n = len(self.world_data)
-        update_mask(n, self.screen)
+        update_mask(self.nb_param, self.screen)
         model = self.models[self.num_model]
         center_text(self.screen, self.data_font, f"{model.N}", FG, 300, 50, 160, 1600)
         x = 1
@@ -318,12 +316,11 @@ class MainThread(Thread):
         """ Affiche les valeurs mondiales
         ---
         """
-        n = len(self.world_data)
-        update_mask(n, self.screen)
+        update_mask(self.nb_param, self.screen)
         center_text(self.screen, self.data_font, f"{self.N}", FG, 300, 50, 160, 1600)
         x = 1
-        for key in self.world_data:
-            center_text(self.screen, self.data_font, f"{int(key[-1])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
+        for key in self.world_param_dict:
+            center_text(self.screen, self.data_font, f"{int(self.world_param_dict[key][-1])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
             x += 1
 
 
@@ -344,7 +341,7 @@ class MainThread(Thread):
         if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
             center_text(
                 self.screen, self.data_font,
-                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
+                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))}",
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
@@ -356,7 +353,7 @@ class MainThread(Thread):
         elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
             center_text(
                 self.screen, self.data_font,
-                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_data[0]))}",
+                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))}",
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
@@ -373,9 +370,9 @@ class MainThread(Thread):
         ## Init info fenêtre
 
         x = 1
-        for key in self.ex_param:
+        for key in self.keys:
             pygame.draw.line(
-                self.screen, self.ex_param[key]['color'],
+                self.screen, self.color_dict[key],
                 (1700, 175 + self.DELTA * x),
                 (1800, 175 + self.DELTA * x),
                 2)
@@ -387,7 +384,7 @@ class MainThread(Thread):
             650, self.LEFT_1 - 5)
 
         # Echelle du monde
-        mx = max([max(x) for x in self.world_data])
+        mx = max([max(self.world_param_dict[x]) for x in self.keys])
         dx = self.H / mx
 
         # Droites du graphique
@@ -418,17 +415,18 @@ class MainThread(Thread):
         self.nb_param = len(self.ex_param)
         self.keys = list(self.ex_param.keys())
         self.N = 0
-        self.data = []
+        self.param_dict = []
         for model in self.models:
-            self.data.append([[model.param_dict[key]["value"]] for key in self.keys])
+            self.param_dict.append({key : [model.param_dict[key]["value"]] for key in self.keys})
             self.N += model.N
         self.y = [0]
         self.num_model = 0
-        self.world_data = [[0] for _ in range(self.nb_param)]
-        for x in range(len(self.data)):
+        self.world_param_dict = {key: [0] for key in self.keys}
+        for x in range(len(self.param_dict)):
             for n in range(self.nb_param):
-                self.world_data[n][0] += self.data[x][n][0]
-        self.color_data = [model.param_dict[x]["color"] for x in self.ex_param]
+                key = self.keys[n]
+                self.world_param_dict[key][0] += self.param_dict[x][key][0]
+        self.color_dict = {x: model.param_dict[x]["color"] for x in self.ex_param}
         self.nb_iterations = [model.nb_iterations for model in self.models]
         self.DELTA = 750 / self.nb_param
 
@@ -463,7 +461,7 @@ class MainThread(Thread):
                 self.update_country_info()
             else:
                 self.update_world_info()
-            if len(self.data[self.num_model][0]) >= 2:
+            if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
                 self.display_graph(1)
                 self.display_graph(2)
         self.tbm.end()
