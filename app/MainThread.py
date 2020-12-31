@@ -16,12 +16,6 @@ from TableManager import CustomTableManager
 from tools import *
 
 
-# Couleur de fond
-BG = (32, 34, 37)
-# Couleur du texte, des axes des graphiques et des bords des pays
-FG = (182, 185, 190)
-
-
 class MainThread(Thread):
 
     def __init__(self, screen, countries, c_tag, font, data_font, num_country, on_world, zoomed):
@@ -146,7 +140,7 @@ class MainThread(Thread):
                 self.display_graph(1)
             create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
             create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
-            x_coord = self.get_scale_value(0, self.models[self.num_model].N, 10)
+            x_coord = get_scale_value(0, self.models[self.num_model].N, 10)
             mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
             dx = self.H / mx
             for x in x_coord:
@@ -158,25 +152,6 @@ class MainThread(Thread):
                 self.screen.blit(
                     self.data_font.render(form, True, FG),
                     ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
-
-
-    def get_scale_value(self, m, M, nb_pt):
-        """ Créer une échelle de valeur
-        ---
-        param :
-
-            - m (int) la valeur minimale de l'échelle
-            - M (int) la valeur maximale de l'échelle
-            - nb_pt (int) le nombre de point de l'échelle
-
-        result :
-
-            - list(int)
-        """
-        if M - m < nb_pt:
-            return [m + x for x in range(M - m + 1)]
-        delta = (M - m) / nb_pt
-        return [x * delta + m for x in range(nb_pt + 1)]
 
 
     def display_graph(self, nb):
@@ -218,7 +193,7 @@ class MainThread(Thread):
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
                          (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT + self.TOP), 2)
 
-        y_coord = self.get_scale_value(0, my, 10)
+        y_coord = get_scale_value(0, my, 10)
         for y in y_coord:
             X = self.MARGIN + int(y * dy)
             d = str(round(y, 2))
@@ -250,7 +225,7 @@ class MainThread(Thread):
             for x in range(len(pts) - 1):
                 pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
 
-        y_coord = self.get_scale_value(0, my, 10)
+        y_coord = get_scale_value(0, my, 10)
         for y in y_coord:
             X = self.MARGIN + int(y * dy)
             d = str(round(y, 2))
@@ -391,7 +366,7 @@ class MainThread(Thread):
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
                          (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
 
-        x_coord = self.get_scale_value(0, self.N, 10)
+        x_coord = get_scale_value(0, self.N, 10)
         for x in x_coord:
             form = "{:.2e}".format(int(x))
             w = self.data_font.size(form)[0]

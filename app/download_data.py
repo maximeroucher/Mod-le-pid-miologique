@@ -11,7 +11,7 @@ import numpy as np
 import progressbar
 import requests
 
-data = json.load(open("data.json"))
+data2 = json.load(open("data2.json", 'r', encoding='utf-8'))
 
 
 def retrieve_data():
@@ -20,7 +20,7 @@ def retrieve_data():
     f = urllib.request.urlopen(link)
     Length = f.getheader('content-length')
     s = ""
-    BlockSize = 2048
+    BlockSize = 1024
 
     if Length:
         Length = int(Length)
@@ -51,7 +51,7 @@ def extract_data(data):
         a = data[x]
         day_track = {}
         day_track['Date'] = a['dateRep']
-        prcm = a['Cumulative_number_for_14_days_of_COVID-19_cases_per_100000']
+        prcm = a['notification_rate_per_100000_population_14-days']
         prcm = prcm if prcm != "" else 0
         prcm = float(prcm)
         tag = a['countryterritoryCode']
@@ -60,11 +60,11 @@ def extract_data(data):
         inf = int(pop * prcm / 100000)
         if not  tag in countries:
             countries[tag] = {"pop": pop, 'days': [], 'name' : a['countriesAndTerritories']}
-            morts = a['deaths']
+            morts = a['deaths_weekly']
             ret = cas = 0
         else:
-            morts = a['deaths'] + countries[tag]['days'][-1]['Morts']
-            cas = countries[tag]['days'][-1]['Total_cas'] + a['cases']
+            morts = a['deaths_weekly'] + countries[tag]['days'][-1]['Morts']
+            cas = countries[tag]['days'][-1]['Total_cas'] + a['cases_weekly']
             ret = cas - inf - morts
         day_track['Total_cas'] = cas
         day_track['Infetés'] = inf
@@ -93,6 +93,7 @@ def json_to_sql(json):
                 params = ", ".join(['?' for n in range(len(m.keys()))])
                 cursor.execute(f"""INSERT INTO "{model}" VALUES (NULL, {params})""", [m[x] for x in list(m.keys())])
     data_base.commit()
+    data_base.close()
 
 
 def get_table_tag(tag):
@@ -103,6 +104,42 @@ def get_table_tag(tag):
         return "string"
     if t == "float":
         return "real"
+
+
+class MyProgressBar():
+
+    def __init__(self):
+        self.pbar = None
+
+    def __call__(self, block_num, block_size, total_size):
+        if not self.pbar:
+            self.pbar = progressbar.ProgressBar(maxval=total_size)
+            self.pbar.start()
+
+        downloaded = block_num * block_size
+        if downloaded < total_size:
+            self.pbar.update(downloaded)
+        else:
+            self.pbar.finish()
+
+
+def retrieve_data2():
+    urllib.request.urlretrieve("https://opendata.ecdc.europa.eu/covid19/subnationalcasedaily/json/",
+                       "data2.json", MyProgressBar())
+
+
+def extract_data2(data):
+    countries = {}
+    for x in data:
+        if not x["country"] in countries:
+            countries[x["country"]] = {}
+            print(x["country"])
+        if not x["date"] in countries[x["country"]]:
+            countries[x["country"]][x["date"]] = 0
+        nb = x.get("rate_14_day_per_100k")
+        if nb != None:
+            countries[x["country"]][x["date"]] += int(nb * 100000)
+    return countries
 
 
 class Fonction:
@@ -214,8 +251,12 @@ class Regression:
         return minCouple
 
 
+#data2 = retrieve_data2()
+print(extract_data2(data2)['Austria'])
+
 #data = retrieve_data()['records']
 #save_data(data)
+"""
 countries = extract_data(data)
 json_to_sql(countries)
-
+"""

@@ -8,6 +8,7 @@ os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
 import pygame
 from shapely.geometry import Point, Polygon
+
 from Pays import Pays
 
 FG = (182, 185, 190)
@@ -238,3 +239,22 @@ def get_scale(country, w, h, t, l):
             f.append([(b[0] - min_l) * scale + l + esp_x, (b[1] - min_t) * scale + t + esp_y])
         border.append(f)
     return border
+
+
+def get_scale_value(m, M, nb_pt):
+    """ Créer une échelle de valeur
+    ---
+    param :
+
+        - m (int) la valeur minimale de l'échelle
+        - M (int) la valeur maximale de l'échelle
+        - nb_pt (int) le nombre de point de l'échelle
+
+    result :
+
+        - list(int)
+    """
+    if M - m < nb_pt:
+        return [m + x for x in range(M - m + 1)]
+    delta = (M - m) / nb_pt
+    return [x * delta + m for x in range(nb_pt + 1)]

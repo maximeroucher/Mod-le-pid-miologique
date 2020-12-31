@@ -1,7 +1,7 @@
 import json
 import os
-import time
 import random
+import time
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
@@ -11,8 +11,8 @@ os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 import pygame
 
 from MainThread import MainThread
-from Pays import Pays
 from Model import CustomModel
+from Pays import Pays
 from TableManager import CustomTableManager
 from tools import *
 
@@ -24,10 +24,8 @@ LEFT = 1
 
 
 # Couleur de fond
-BG = (32, 34, 37)
 HEXBG = "#36393f"
 # Couleur du texte, des axes des graphiques et des bords des pays
-FG = (182, 185, 190)
 HEXFG = "#B6B9BE"
 
 # Coordonnées du carré du bouton (l, b, r, t)
@@ -104,7 +102,7 @@ while True:
                                             n = c_tag.index(c.tag)
                                             if graph.num_country != n:
                                                 graph.change_countries(n)
-                                            changed =  graph.zoomed = True
+                                            changed = graph.zoomed = True
                                             graph.on_world = False
                                             break
 
@@ -129,6 +127,9 @@ while True:
 
 # TODO:
 #       - régress° (vérif)
+#       - choisir les compartiments à afficher
+#       - afficher reg à gch (+ delta)
+#       - test / vaccin (gch)
 #       - mettre date abscisse
 #       - estimation tps calcul
-#       - choisir les compartiments à afficher
+#       - IA classique + LSTM
