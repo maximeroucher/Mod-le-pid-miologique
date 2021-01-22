@@ -18,7 +18,7 @@ from tools import *
 
 class MainThread(Thread):
 
-    def __init__(self, screen, countries, c_tag, font, data_font, num_country, on_world, zoomed):
+    def __init__(self, screen, countries, c_tag, font, data_font, num_country, on_world, zoomed, black_list):
         """ Initialisation d'un graphique
         ---
         param :
@@ -53,6 +53,8 @@ class MainThread(Thread):
         self.param = []
         #self.tbm = TableManager(countries)
         self.tbm = CustomTableManager(countries)
+        # Les compartiments à ne pas afficher
+        self.black_list = black_list
 
         ## Surface
 
@@ -105,7 +107,7 @@ class MainThread(Thread):
 
             - day (int) le jour de la simulation
         """
-        d = {key: 0 for key in self.keys}
+        d = {key: 0 for key in self.keys if key not in self.black_list}
         self.N = 0
         for n in range(len(self.models)):
             model = self.models[n]
@@ -142,16 +144,17 @@ class MainThread(Thread):
             create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
             x_coord = get_scale_value(0, self.models[self.num_model].N, 10)
             mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
-            dx = self.H / mx
-            for x in x_coord:
-                form = "{:.2e}".format(int(x))
-                w = self.data_font.size(form)[0]
-                Y = self.HAUT - int(x * dx)
-                pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
-                                (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
-                self.screen.blit(
-                    self.data_font.render(form, True, FG),
-                    ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
+            if mx > 0:
+                dx = self.H / mx
+                for x in x_coord:
+                    form = "{:.2e}".format(int(x))
+                    w = self.data_font.size(form)[0]
+                    Y = self.HAUT - int(x * dx)
+                    pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
+                                    (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
+                    self.screen.blit(
+                        self.data_font.render(form, True, FG),
+                        ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
 
 
     def display_graph(self, nb):
@@ -174,33 +177,34 @@ class MainThread(Thread):
         ---
         """
         mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
-        my = self.y[-1]
+        if mx > 0:
+            my = self.y[-1]
 
-        dx = self.H / mx
-        dy = self.W / my
+            dx = self.H / mx
+            dy = self.W / my
 
-        create_mask(self.TOP, self.LEFT_1 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG, self.screen)
-        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10,
-                    self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
+            create_mask(self.TOP, self.LEFT_1 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG, self.screen)
+            create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10,
+                        self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
 
-        for key in self.keys:
-            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.param_dict[self.num_model][key]]
-            c_y = [x * dy + self.MARGIN + self.LEFT_1 for x in self.y]
-            pts = list(zip(c_y, c_x))
-            for x in range(len(pts) - 1):
-                pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
+            for key in self.keys:
+                c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.param_dict[self.num_model][key]]
+                c_y = [x * dy + self.MARGIN + self.LEFT_1 for x in self.y]
+                pts = list(zip(c_y, c_x))
+                for x in range(len(pts) - 1):
+                    pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
 
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
-                         (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT + self.TOP), 2)
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
+                            (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT + self.TOP), 2)
 
-        y_coord = get_scale_value(0, my, 10)
-        for y in y_coord:
-            X = self.MARGIN + int(y * dy)
-            d = str(round(y, 2))
-            w, _ = self.font.size(d)
-            pygame.draw.line(self.screen, FG, (self.LEFT_1 + X, self.HAUT + self.TOP),
-                             (self.LEFT_1 + X, self.DHAUT + self.TOP), 2)
-            self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP))
+            y_coord = get_scale_value(0, my, 10)
+            for y in y_coord:
+                X = self.MARGIN + int(y * dy)
+                d = str(round(y, 2))
+                w, _ = self.font.size(d)
+                pygame.draw.line(self.screen, FG, (self.LEFT_1 + X, self.HAUT + self.TOP),
+                                (self.LEFT_1 + X, self.DHAUT + self.TOP), 2)
+                self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP))
 
 
     def display_world(self):
@@ -366,7 +370,7 @@ class MainThread(Thread):
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
                          (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
 
-        x_coord = get_scale_value(0, self.N, 10)
+        x_coord = get_scale_value(0, mx, 10)
         for x in x_coord:
             form = "{:.2e}".format(int(x))
             w = self.data_font.size(form)[0]
@@ -386,7 +390,8 @@ class MainThread(Thread):
         """ Initialise les paramètres d'affichage
         ---
         """
-        self.ex_param = self.models[0].param_dict
+        self.ex_param = {key: self.models[0].param_dict[key] for key in self.models[0].param_dict
+                         if key not in self.black_list}
         self.nb_param = len(self.ex_param)
         self.keys = list(self.ex_param.keys())
         self.N = 0

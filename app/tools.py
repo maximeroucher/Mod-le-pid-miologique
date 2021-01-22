@@ -258,3 +258,57 @@ def get_scale_value(m, M, nb_pt):
         return [m + x for x in range(M - m + 1)]
     delta = (M - m) / nb_pt
     return [x * delta + m for x in range(nb_pt + 1)]
+
+
+# Runge Kutta 4
+
+def RK4(h, T, y0, f):
+    # f verifie : y' = f(y, t)
+    t = 0
+    y = y0
+    res_t = [0]
+    res_y = [y0]
+    while t < T:
+        k1 = f(t, y)
+        k2 = f(t + 1 / 2 * h, y + 1 / 2 * h * k1)
+        k3 = f(t + 1 / 2 * h, y + 1 / 2 * h * k2)
+        k4 = f(t + h, y + h * k3)
+        y = y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        t = t + h
+        res_t.append(t)
+        res_y.append(y)
+    return res_t, res_y
+
+
+
+import numpy as np
+from matplotlib import pyplot as plt
+
+
+def plotdf(xran, yran, grid):
+    x = np.linspace(xran[0], xran[1], grid[0])
+    y = np.linspace(yran[0], yran[1], grid[1])
+
+    X, Y = np.meshgrid(x, y)
+    # Equa diff du modèle SIR
+    DX, DY = - X * Y, x * Y - Y
+    M = np.hypot(DX, DY)
+    M[M == 0] = 1.
+    DX = DX / M
+    DY = DY / M
+
+    plt.xlabel("Sains")
+    plt.ylabel("Infectés")
+    plt.quiver(X, Y, DX, DY, np.arctan2(DX, DY), cmap='rainbow', pivot='mid', scale=grid[0])
+    plt.xlim(xran)
+    plt.ylim(yran)
+    plt.grid('on')
+
+
+## Example
+if __name__ == "__main__":
+    plotdf(xran=[-1, 3], yran=[-1, 3], grid=[50, 50])
+    plt.show()
+
+
+# https://gist.github.com/nicoguaro/6767643

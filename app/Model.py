@@ -13,7 +13,7 @@ class CustomModel:
         self.tag = country.tag
         self.nb_iterations = tbm.sim_length(self.tag)
         self.param_list = tbm.get_CI()[1:]
-        cols = [(237, 203, 81), (198, 96, 55), (77, 94, 118), (10, 100, 203), (128, 179, 64)]
+        cols = [(128, 179, 64), (198, 96, 55), (10, 100, 203), (237, 203, 81), (77, 94, 118)]
         data = tbm.get_country_data_by_id(1, self.tag)[1:]
         self.N = data[-2]
         self.param_dict = {self.param_list[x]: {"value": data[x], "color": cols[x]}

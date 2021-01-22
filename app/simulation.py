@@ -141,7 +141,7 @@ class Person:
 
 class Simulation:
 
-    def __init__(self, person, w, h, screen, top, taux_incidence, no_action=False):
+    def __init__(self, person, w, h, screen, top, taux_incidence):
         """ Initialisation de la simulation
         ---
         param :
@@ -167,6 +167,7 @@ class Simulation:
         self.screen = screen
         self.comportement = Comportement.NORMAL
         self.TAUX_INCIDENCE = taux_incidence
+        self.quarantine_time = []
 
         # Largeur de la fenêtre
         self.WIDTH = 700
@@ -186,7 +187,8 @@ class Simulation:
         self.TOP = top
         # La distance à gauche du graphique du pays
         self.LEFT = 1100
-        self.no_action = no_action
+        self.no_action = taux_incidence == 0
+        self.ended = False
 
 
     def init_affichage(self):
@@ -233,8 +235,14 @@ class Simulation:
 
         create_mask(self.TOP + self.MARGIN, self.LEFT + self.MARGIN + 2,
                     self.WIDTH - 2 * self.MARGIN, self.HEIGHT - 2 * self.MARGIN, BG, self.screen)
+        # Update barre nombres
         create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT + self.MARGIN - 10,
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
+
+        c_y = [x * dy + self.MARGIN + self.LEFT for x in self.quarantine_time]
+        pts = [[[c_y[x], self.HAUT + 3 * self.MARGIN - self.TOP + 10], [c_y[x], self.TOP + self.MARGIN]] for x in range(len(c_y))]
+        for x in range(len(pts)):
+            pygame.draw.line(self.screen, FG, pts[x][0], pts[x][1], 2)
 
         for key in self.data:
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.data[key]]
@@ -338,6 +346,9 @@ class Simulation:
             self.update_data()
             self.update_text()
             self.display_country()
+        else:
+            if not self.ended:
+                self.ended = True
         pygame.display.update()
 
 
@@ -345,6 +356,7 @@ class Simulation:
         if not self.no_action:
             if len(self.infectes) > self.TAUX_INCIDENCE and self.comportement == Comportement.NORMAL:
                 self.comportement = Comportement.QUARANTAINE
+                self.quarantine_time.append(self.y[-1])
                 for p in self.person:
                     p.comportement = Comportement.QUARANTAINE
                     p.start_quarantine()
@@ -353,6 +365,7 @@ class Simulation:
                 for p in self.person:
                     p.comportement = Comportement.NORMAL
                     p.end_quarantine()
+                    self.quarantine_time.append(self.y[-1])
 
 
 pygame.init()
@@ -365,6 +378,9 @@ h = info.current_h // 2 - 10
 
 person = []
 NB_PERSON = 750
+S1 = 50
+S2 = 0
+SAVE = False
 
 for _ in range(NB_PERSON):
     v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
@@ -375,10 +391,17 @@ for _ in range(NB_PERSON):
             random.randint(0, h),
             vx, vy, 0, 0, .5))
 
-Sim = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 50, 50)
-Sim2 = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 600, 1, no_action=True)
+if SAVE:
+    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}-{S2}"
+    if not os.path.exists(titre):
+        os.makedirs(titre)
+
+Sim = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 50, S1)
+Sim2 = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 599, S2)
 Sim.init_affichage()
 Sim2.init_affichage()
+x = 0
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -388,3 +411,8 @@ while True:
     Sim2.update()
     Sim.show()
     Sim2.show()
+    if SAVE:
+        if not Sim.ended and not Sim2.ended:
+            pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}-{S2}\\img{x}.jpg")
+    x += 1
+

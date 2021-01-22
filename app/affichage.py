@@ -61,7 +61,7 @@ changed = False
 c_tag = [c.tag for c in countries]
 
 # Le Thread principale
-graph = MainThread(screen, countries, c_tag, font, data_font, random.randint(0, len(c_tag)), True, False)
+graph = MainThread(screen, countries, c_tag, font, data_font, random.randint(0, len(c_tag)), True, False, ["Sains"])
 
 # Les fenêtres de menu
 try:
@@ -126,8 +126,7 @@ while True:
 
 
 # TODO:
-#       - régress° (vérif)
-#       - choisir les compartiments à afficher
+#       - refaire échelle
 #       - afficher reg à gch (+ delta)
 #       - test / vaccin (gch)
 #       - mettre date abscisse
