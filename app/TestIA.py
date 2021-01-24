@@ -79,3 +79,4 @@ for _ in range(10000):
 print(NN.predict([1]))
 
 # https://dustinstansbury.github.io/theclevermachine/derivation-backpropagation
+

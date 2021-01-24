@@ -138,10 +138,9 @@ def extract_data2(data):
     return countries
 
 
-data2 = retrieve_data2()
-print(extract_data2(data2)['Austria'])
+#data2 = retrieve_data2()
 
-#data = retrieve_data()['records']
+data = retrieve_data()['records']
 save_data(data)
 
 countries = extract_data(data)

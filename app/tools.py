@@ -201,9 +201,9 @@ def update_mask(n, screen):
         - screen (pygame.Surface) la surface sur laquelle afficher le pays
     """
     w = 750 / n
-    create_mask(170, 1550, 400, 50, BG, screen)
+    create_mask(170, 1695, 110, 50, BG, screen)
     for x in range(1, n + 1):
-        create_mask(177 + w * x, 1550, 400, 50, BG, screen)
+        create_mask(177 + w * x, 1695, 110, 50, BG, screen)
 
 
 # Redimensionnement
@@ -291,7 +291,7 @@ def plotdf(xran, yran, grid):
 
     X, Y = np.meshgrid(x, y)
     # Equa diff du modèle SIR
-    DX, DY = - X * Y, x * Y - Y
+    DX, DY = - X * Y, X * Y - Y
     M = np.hypot(DX, DY)
     M[M == 0] = 1.
     DX = DX / M

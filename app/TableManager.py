@@ -66,6 +66,9 @@ class CustomTableManager:
 
 
     def connect(self):
+        """ Ouvre la fenêtre de sélection de la base de donnée et charge la base de donnée
+        ---
+        """
         f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
         if f:
             if not f.endswith(".db"):
@@ -97,7 +100,7 @@ class CustomTableManager:
 
 
     def extract_model_from_db(self):
-        """ Créer les modèles
+        """ Créer les modèles à partir des données chargées
         ---
         """
         for c in self.countries:

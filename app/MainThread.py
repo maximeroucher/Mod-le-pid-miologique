@@ -107,7 +107,7 @@ class MainThread(Thread):
 
             - day (int) le jour de la simulation
         """
-        d = {key: 0 for key in self.keys if key not in self.black_list}
+        d = {key: 0 for key in self.keys}
         self.N = 0
         for n in range(len(self.models)):
             model = self.models[n]
@@ -138,12 +138,13 @@ class MainThread(Thread):
             center_text(
                 self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
                 650, self.LEFT_1 - 5)
+            self.update_country_info()
             if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
                 self.display_graph(1)
             create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
             create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
-            x_coord = get_scale_value(0, self.models[self.num_model].N, 10)
             mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
+            x_coord = get_scale_value(0, mx, 10)
             if mx > 0:
                 dx = self.H / mx
                 for x in x_coord:
@@ -186,6 +187,21 @@ class MainThread(Thread):
             create_mask(self.TOP, self.LEFT_1 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG, self.screen)
             create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10,
                         self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
+            create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+
+            x_coord = get_scale_value(0, mx, 10)
+            if mx > 0:
+                dx = self.H / mx
+                for x in x_coord:
+                    form = "{:.2e}".format(int(x))
+                    w = self.data_font.size(form)[0]
+                    Y = self.HAUT - int(x * dx)
+                    pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
+                                     (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
+                    self.screen.blit(
+                        self.data_font.render(form, True, FG),
+                        ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
+
 
             for key in self.keys:
                 c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.param_dict[self.num_model][key]]
@@ -222,6 +238,19 @@ class MainThread(Thread):
         create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 10,
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
 
+        create_mask(self.TOP + 10, self.LEFT_2 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+
+        x_coord = get_scale_value(0, mx, 10)
+        for x in x_coord:
+            form = "{:.2e}".format(int(x))
+            w = self.data_font.size(form)[0]
+            Y = self.HAUT - int(x * dx)
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, Y + self.TOP),
+                             (self.MARGIN - 5 + self.LEFT_2, Y + self.TOP), 2)
+            self.screen.blit(
+                self.data_font.render(form, True, FG),
+                ((self.MARGIN - w) + self.LEFT_2 - 10, Y - 10 + self.TOP))
+
         for key in self.keys:
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.world_param_dict[key]]
             c_y = [x * dy + self.MARGIN + self.LEFT_2 for x in self.y]
@@ -256,9 +285,10 @@ class MainThread(Thread):
         center_text(self.screen, self.data_font, f"{model.N}", FG, 300, 50, 160, 1600)
         x = 1
         for key in model.param_dict:
-            center_text(self.screen, self.data_font,
-                        f"{int(model.param_dict[key]['value'])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
-            x += 1
+            if not key in self.black_list:
+                center_text(self.screen, self.data_font,
+                            f"{int(model.param_dict[key]['value'])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
+                x += 1
         create_mask(30, 10, 1540, 620, BG, self.screen)
         border = get_scale(model.country, 1500, 500, 50, 20)
         for c in border:
@@ -286,9 +316,10 @@ class MainThread(Thread):
         center_text(self.screen, self.data_font, f"{model.N}", FG, 300, 50, 160, 1600)
         x = 1
         for key in model.param_dict:
-            center_text(self.screen, self.data_font,
-                        f"{int(model.param_dict[key]['value'])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
-            x += 1
+            if not key in self.black_list:
+                center_text(self.screen, self.data_font,
+                            f"{int(model.param_dict[key]['value'])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
+                x += 1
 
 
     def update_world_info(self):
@@ -299,8 +330,9 @@ class MainThread(Thread):
         center_text(self.screen, self.data_font, f"{self.N}", FG, 300, 50, 160, 1600)
         x = 1
         for key in self.world_param_dict:
-            center_text(self.screen, self.data_font, f"{int(self.world_param_dict[key][-1])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
-            x += 1
+            if key not in self.black_list:
+                center_text(self.screen, self.data_font, f"{int(self.world_param_dict[key][-1])}", FG, 300, 40, 175 + self.DELTA * x, 1600)
+                x += 1
 
 
     def graph_value(self):
@@ -324,7 +356,7 @@ class MainThread(Thread):
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
-                    int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.models[self.num_model].N)),
+                    int((self.COUNTRY_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]]))),
                 FG, 150, 50, 630, 15)
             self.need_mask = True
 
@@ -336,7 +368,7 @@ class MainThread(Thread):
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
-                    int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * self.N)),
+                    int((self.WORLD_GRAPH_BOUND[1] - y) * self.COEF_HEIGHT * max([max(self.world_param_dict[x]) for x in self.keys]))),
                 FG, 150, 50, 630, 15)
             self.need_mask = True
         return x, y
@@ -421,8 +453,8 @@ class MainThread(Thread):
         # Affiche mes textes
         center_text(self.screen, self.font, "Evolution mondiale", FG, 700, 50, 650, 100)
         center_text(self.screen, self.font, "Population de départ", FG, 300, 50, 130, 1600)
-        self.screen.blit(self.font.render("Simulation d'une épidémie de ...", True, FG), (20, 0))
-        # Récupère les modèles et initialise la simulatio
+        self.screen.blit(self.font.render("Épidémie de COVID-19", True, FG), (20, 0))
+        # Récupère les modèles et initialise la simulation
         self.models = self.tbm.models
         self.init_model()
         self.update_world()

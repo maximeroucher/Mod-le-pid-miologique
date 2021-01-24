@@ -126,9 +126,7 @@ while True:
 
 
 # TODO:
-#       - refaire échelle
 #       - afficher reg à gch (+ delta)
-#       - test / vaccin (gch)
 #       - mettre date abscisse
 #       - estimation tps calcul
 #       - IA classique + LSTM

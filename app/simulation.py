@@ -5,6 +5,7 @@ import time
 from enum import Enum
 
 from tools import *
+import sqlite3
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
@@ -33,7 +34,21 @@ class Comportement(Enum):
 
 class Person:
 
-    def __init__(self, x, y, vx, vy, ax, ay, p):
+    def __init__(self, id, x, y, vx, vy, ax, ay, p):
+        """ Initialisation de la personne
+        ---
+        param :
+
+            - id (int) l'identifiant de la personne
+            - x (int) la position en absisce
+            - y (int) la position en ordonnée
+            - vx (float) la vitesse en absisce
+            - vy (float) la vitesse en ordonnée
+            - ax (float) l'accélération en absisce
+            - ay (float) l'accélération en ordonnée
+            - p (float 0 <= p <= 1) la probabilité de contaminer une personne
+        """
+        self.id = id
         self.x = x
         self.y = y
         self.vx = vx
@@ -48,7 +63,20 @@ class Person:
         self.RAYON = 6
 
 
+    def __eq__(self, other):
+        """ Égalité entre deux personnes
+        ---
+        param :
+
+            - other (Person) la personne dont on veut vérifier si c'est l'autre
+        """
+        return self.id == other.id
+
+
     def correction_vitesse(self):
+        """ Renormalise la vitesse si elle dépasse la vitesse maximale
+        ---
+        """
         v = self.vx ** 2 + self.vy ** 2
         if v > self.VMAX ** 2:
             r = self.VMAX / math.sqrt(v)
@@ -57,6 +85,14 @@ class Person:
 
 
     def update(self, w, h, person):
+        """ Calcul de l'étape suivante
+        ---
+        param :
+
+            - w (int) la largeur de l'espace de simulation
+            - h (int) la hauteur de l'espace de simulation
+            - person (list(Person)) la liste des personnes de la simulation
+        """
         if self.comportement == Comportement.QUARANTAINE:
             self.repulsion(person)
         self.correction_vitesse()
@@ -76,6 +112,12 @@ class Person:
 
 
     def position(self, other):
+        """ Indique la position de la personne par rapport à l'autre
+        ---
+        param :
+
+            - other (Person) la personne dont on veut comparer la position
+        """
         pos = [1, 1]
         if self.x < other.x:
             pos[0] = -1
@@ -85,35 +127,51 @@ class Person:
 
 
     def end_quarantine(self):
+        """ Augmente la vitesse pour la remettre à sa valeur d'origine
+        ---
+        """
         self.VMAX = 5
         self.vx = (self.vx / 2) * self.VMAX
         self.vy = (self.vy / 2) * self.VMAX
 
 
     def start_quarantine(self):
+        """ Dinimue la vitesse pour limiter les contacts
+        ---
+        """
         self.vx = (self.vx / self.VMAX) * 2
         self.vy = (self.vy / self.VMAX) * 2
         self.VMAX = 2
 
 
     def repulsion(self, person): #TODO:
+        """ Calcule une force de répulsion entre les autres particules et celle-ci, dans le cas d'un confinement
+        ---
+        param :
+
+            - person (list(Person)) la liste des personnes de la simulation
+        """
         ax = ay = 0
         for other in person:
-            dx = abs(self.x - other.x)
-            if dx < 20 * self.RAYON:
-                dy = abs(self.y - other.y)
-                if dy < 20 * self.RAYON:
-                    ndx = abs(self.x + self.vx - other.x - other.vx)
-                    ndy = abs(self.y + self.vy - other.y - other.vy)
-                    r = dx ** 2 + dy ** 2 + 1e-9
-                    pos = self.position(other)
-                    ax += dx ** 2 / r
-                    ay += dy ** 2 / r
+            if other is not self:
+                dx = abs(self.x - other.x)
+                if dx < 20 * self.RAYON:
+                    dy = abs(self.y - other.y)
+                    if dy < 20 * self.RAYON:
+                        ndx = abs(self.x + self.vx - other.x - other.vx)
+                        ndy = abs(self.y + self.vy - other.y - other.vy)
+                        r = dx ** 2 + dy ** 2 + 1e-9
+                        pos = self.position(other)
+                        ax += dx ** 2 / r
+                        ay += dy ** 2 / r
         self.ax = ax
         self.ay = ay
 
 
     def get_color(self):
+        """ Indique la couleur d'affichage en fonction de l'état
+        ---
+        """
         if self.etat == Etat.SAIN:
             return colors[0]
         elif self.etat == Etat.INFECTE:
@@ -122,6 +180,9 @@ class Person:
 
 
     def collision(self, other):
+        """ Vérifie s'il y a collision
+        ---
+        """
         dx = self.x - other.x
         if dx < 1.5 * 2 * self.RAYON:
             dy = self.y - other.y
@@ -131,12 +192,22 @@ class Person:
         return False
 
 
-    def show(self, scree, t):
+    def show(self, screen, t):
+        """ Affiche la personne
+        ---
+        param :
+
+            - screen (pygame.Surface) l'écran
+            - t (int) la distance au bord supérieur de la fenêtre
+        """
         pygame.draw.circle(screen, self.get_color(), (self.x, self.y + t), self.RAYON)
 
 
     def copy(self):
-        return Person(self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.p)
+        """ Retourne une copie de la persoone
+        ---
+        """
+        return Person(self.id, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.p)
 
 
 class Simulation:
@@ -146,10 +217,12 @@ class Simulation:
         ---
         param :
 
-            - nb_person (int) le nombre de personne de la simulation
+            - person (list(Person)) la liste de personne de la simulation
             - w (int) la largeur de l'espace de la simulation
             - h (int) la hauteur de l'espace de la simulation
             - screen (Pygame.Surface) la surface sur laquelle afficher la simulation
+            - top (int) la distance au haut de la fenêtre
+            - taux_incidence (int) le nombre de personnes infectés simultanément avant de mettre en place une quarantaine
         """
         self.person = [Person.copy(p) for p in person]
         self.person[0].etat = Etat.INFECTE
@@ -353,6 +426,9 @@ class Simulation:
 
 
     def update_comportement(self):
+        """ Met à jour le comportement de la simulation
+        ---
+        """
         if not self.no_action:
             if len(self.infectes) > self.TAUX_INCIDENCE and self.comportement == Comportement.NORMAL:
                 self.comportement = Comportement.QUARANTAINE
@@ -374,33 +450,42 @@ screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAM
 screen.fill(BG)
 
 w = info.current_w // 2 - 10
-h = info.current_h // 2 - 10
+h = info.current_h - 10
 
 person = []
-NB_PERSON = 750
-S1 = 50
-S2 = 0
+S1 = 0
+NB_PERSON = 2000
 SAVE = False
 
-for _ in range(NB_PERSON):
+for k in range(NB_PERSON):
     v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
     vx, vy = v * math.cos(theta), v * math.sin(theta)
     person.append(
-        Person(
+        Person(k,
             random.randint(0, w),
             random.randint(0, h),
             vx, vy, 0, 0, .5))
 
+
+Sim = Simulation(person, w, h, screen, 50, S1)
+Sim.init_affichage()
+x = 0
+
+
 if SAVE:
-    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}-{S2}"
+    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}"
     if not os.path.exists(titre):
         os.makedirs(titre)
+    os.chdir(titre)
+    filename = "result.db"
+    if filename in os.listdir():
+        os.remove(filename)
+    data_base = sqlite3.connect(filename, check_same_thread=False)
+    cursor = data_base.cursor()
+    cursor.execute(f"""CREATE TABLE IF NOT EXISTS Sim (id integer PRIMARY KEY, {",".join([f'{key} int' for key in Sim.data])})""")
 
-Sim = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 50, S1)
-Sim2 = Simulation(person, info.current_w // 2 - 10, info.current_h // 2 - 10, screen, 599, S2)
-Sim.init_affichage()
-Sim2.init_affichage()
-x = 0
+
+DATA_SAVED = False
 
 while True:
     for event in pygame.event.get():
@@ -408,11 +493,22 @@ while True:
             quit()
     time.sleep(.01)
     Sim.update()
-    Sim2.update()
     Sim.show()
-    Sim2.show()
     if SAVE:
-        if not Sim.ended and not Sim2.ended:
-            pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}-{S2}\\img{x}.jpg")
-    x += 1
+        if not Sim.ended:
+            pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}\\img{x}.jpg")
+        elif not DATA_SAVED:
+            for k in range(x):
+                cursor.execute(f"""INSERT INTO Sim VALUES (NULL, {",".join([str(Sim.data[key][k]) for key in Sim.data])})""")
+            data_base.commit()
+            data_base.close()
+            DATA_SAVED = True
+        x += 1
 
+
+# TODO:
+#       - afficher reg°
+#       - opti° reg°
+
+# pb test
+# https://jamanetwork.com/journals/jama/fullarticle/2762130
