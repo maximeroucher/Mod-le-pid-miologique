@@ -7,7 +7,7 @@ from datetime import datetime
 import progressbar
 import requests
 
-data2 = json.load(open("data2.json", 'r', encoding='utf-8'))
+#data2 = json.load(open("data2.json", 'r', encoding='utf-8'))
 
 
 def retrieve_data():
@@ -38,7 +38,7 @@ def retrieve_data():
 
 
 def save_data(output):
-    json.dump(output, open("data.json", "w"))
+    json.dump(output, open("data3.json", "w"))
 
 
 def extract_data(data):
@@ -47,20 +47,20 @@ def extract_data(data):
         a = data[x]
         day_track = {}
         day_track['Date'] = a['dateRep']
-        prcm = a['notification_rate_per_100000_population_14-days']
+        prcm = a['Cumulative_number_for_14_days_of_COVID-19_cases_per_100000']
         prcm = prcm if prcm != "" else 0
         prcm = float(prcm)
         tag = a['countryterritoryCode']
         pop = a['popData2019']
         pop = pop if pop != None else 0
         inf = int(pop * prcm / 100000)
-        if not  tag in countries:
+        if not tag in countries:
             countries[tag] = {"pop": pop, 'days': [], 'name' : a['countriesAndTerritories']}
-            morts = a['deaths_weekly']
+            morts = a['deaths']
             ret = cas = 0
         else:
-            morts = a['deaths_weekly'] + countries[tag]['days'][-1]['Morts']
-            cas = countries[tag]['days'][-1]['Total_cas'] + a['cases_weekly']
+            morts = a['deaths'] + countries[tag]['days'][-1]['Morts']
+            cas = countries[tag]['days'][-1]['Total_cas'] + a['cases']
             ret = cas - inf - morts
         day_track['Total_cas'] = cas
         day_track['Infetés'] = inf
@@ -120,29 +120,78 @@ class MyProgressBar():
 
 
 def retrieve_data2():
-    urllib.request.urlretrieve("https://opendata.ecdc.europa.eu/covid19/subnationalcasedaily/json/",
-                       "data2.json", MyProgressBar())
+    link = "https://covid.ourworldindata.org/data/owid-covid-data.json"
+    print("Chargement des données")
+    f = urllib.request.urlopen(link)
+    Length = f.getheader('content-length')
+    s = ""
+    BlockSize = 1024
+
+    if Length:
+        Length = int(Length)
+        pgb = progressbar.ProgressBar(maxval=Length)
+
+    Size = 0
+    while True:
+        BufferNow = f.read(BlockSize)
+        if not BufferNow:
+            break
+        s += BufferNow.decode()
+        Size += len(BufferNow)
+        if Length:
+            Percent = int((Size / Length) * 100)
+            pgb.update(Size)
+
+    print("Données récupérées")
+    return json.loads(s)
 
 
 def extract_data2(data):
     countries = {}
-    for x in data:
-        if not x["country"] in countries:
-            countries[x["country"]] = {}
-            print(x["country"])
-        if not x["date"] in countries[x["country"]]:
-            countries[x["country"]][x["date"]] = 0
-        nb = x.get("rate_14_day_per_100k")
-        if nb != None:
-            countries[x["country"]][x["date"]] += int(nb * 100000)
+    keys = list(data.keys())
+    for k in keys:
+        d = data[k]
+        p = d.get('population')
+        if p is not None:
+            pop = int(d['population'])
+            countries[k] = {"pop": pop, 'days': [], 'name': d['location']}
+            inf_mem = []
+            d = d['data']
+            for i in range(len(d)):
+                day_track = {}
+                day_track['Date'] = d[i]['date']
+                t = d[i].get('new_cases_smoothed_per_million')
+                m = d[i].get('new_deaths_smoothed_per_million')
+                r = d[i].get('total_cases')
+                inf =  int(t  * p / 1000000) if t is not None else 0
+                inf_mem.append(inf)
+                ttl = int(r) if r is not None else 0
+                sns = int(pop - t * p / 1000000) if t is not None else pop
+                mrt = int(m * p / 1000000) if m is not None else 0
+                if i != 0:
+                    mrt += countries[k]['days'][i - 1]['Morts']
+                    inf += countries[k]['days'][i - 1]['Infetés']
+                if i > 14: #Approx°
+                    inf -= inf_mem.pop(0)
+                ret = int(ttl - inf)
+                day_track['Total_cas'] = ttl
+                day_track['Infetés'] = inf
+                day_track['Rétablis'] = ret
+                day_track['Sains'] = sns
+                day_track['Morts'] = mrt
+                countries[k]['days'].append(day_track)
     return countries
 
 
-#data2 = retrieve_data2()
+#data = json.load(open("data3.json", 'r', encoding='utf-8'))
+data2 = retrieve_data2()
 
-data = retrieve_data()['records']
+""" data = retrieve_data()['records']
 save_data(data)
 
-countries = extract_data(data)
+#data = json.load(open("data.json", 'r', encoding='utf-8'))
+"""
+countries = extract_data2(data2)
+
 json_to_sql(countries)
 

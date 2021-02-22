@@ -1,15 +1,10 @@
-import json
 import os
-import random
-import sqlite3
 import time
 from threading import Thread
-from tkinter import messagebox
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
 
-import easygui
 import pygame
 
 from TableManager import CustomTableManager
@@ -129,33 +124,36 @@ class MainThread(Thread):
 
             - n (int) le numéro du pays donné
         """
-        tag = self.c_tag[n]
-        self.num_country = n
-        a = [n for n in range(len(self.models)) if self.models[n].country.tag == tag]
-        if len(a) > 0:
-            self.num_model = a[0]
-            create_mask(650, self.LEFT_1 - 5, self.WIDTH, 30, BG, self.screen)
-            center_text(
-                self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
-                650, self.LEFT_1 - 5)
-            self.update_country_info()
-            if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
-                self.display_graph(1)
-            create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
-            create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
-            mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
-            x_coord = get_scale_value(0, mx, 10)
-            if mx > 0:
-                dx = self.H / mx
-                for x in x_coord:
-                    form = "{:.2e}".format(int(x))
-                    w = self.data_font.size(form)[0]
-                    Y = self.HAUT - int(x * dx)
-                    pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
-                                    (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
-                    self.screen.blit(
-                        self.data_font.render(form, True, FG),
-                        ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
+        if n < len(self.c_tag):
+            tag = self.c_tag[n]
+            self.num_country = n
+            a = [n for n in range(len(self.models)) if self.models[n].country.tag == tag]
+            if len(a) > 0:
+                self.num_model = a[0]
+                create_mask(650, self.LEFT_1 - 5, self.WIDTH, 30, BG, self.screen)
+                center_text(
+                    self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
+                    650, self.LEFT_1 - 5)
+                self.update_country_info()
+                if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
+                    self.display_graph(1)
+                create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+                create_mask(self.TOP - 10, self.LEFT_1 + 25, 5, self.HEIGHT - self.MARGIN, BG, self.screen)
+                mx = max([max(self.param_dict[self.num_model][x]) for x in self.param_dict[self.num_model]])
+                x_coord = get_scale_value(0, mx, 10)
+                if mx > 0:
+                    dx = self.H / mx
+                    for x in x_coord:
+                        form = "{:.2e}".format(int(x))
+                        w = self.data_font.size(form)[0]
+                        Y = self.HAUT - int(x * dx)
+                        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, Y + self.TOP),
+                                        (self.MARGIN - 5 + self.LEFT_1, Y + self.TOP), 2)
+                        self.screen.blit(
+                            self.data_font.render(form, True, FG),
+                            ((self.MARGIN - w) + self.LEFT_1 - 10, Y - 10 + self.TOP))
+            else:
+                self.change_countries(0)
 
 
     def display_graph(self, nb):
@@ -464,7 +462,7 @@ class MainThread(Thread):
         x = 0
         self.init_affichage()
         self.gen_data(x)
-        for _ in range(int(self.nb_iterations[self.num_model])):
+        while x < self.nb_iterations[self.num_model]:
             x += 1
             self.y.append(len(self.y))
             self.gen_data(x)

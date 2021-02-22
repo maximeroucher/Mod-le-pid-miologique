@@ -285,29 +285,47 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-def plotdf(xran, yran, grid):
+def afficher_champ_vecteur(xran, yran, grid):
+    """ Affiche le champ vectoriel associé à l'équation différentielle du modèle SIR
+    ---
+    param :
+
+        - xran (list(int)) la liste contenant la valeur minimale et maximale de x
+        - xran (list(int)) la liste contenant la valeur minimale et maximale de y
+        - grid (list(int)) le nombre de vecteur selon x et y
+    """
     x = np.linspace(xran[0], xran[1], grid[0])
     y = np.linspace(yran[0], yran[1], grid[1])
 
     X, Y = np.meshgrid(x, y)
     # Equa diff du modèle SIR
     DX, DY = - X * Y, X * Y - Y
-    M = np.hypot(DX, DY)
+
+    # On normalise chaque vecteur
+
+    # La longueur de chaque vecteur
+    M = np.hypot(DX, DY) # M est une matrice de valeur
+    # Si les longueurs sont nuls on les met à 1
     M[M == 0] = 1.
+    # on normalise
     DX = DX / M
     DY = DY / M
 
+    # Le nom des axes
     plt.xlabel("Sains")
     plt.ylabel("Infectés")
+    # affichage du champs (pivot est la position selon laquelle le vecteur pivote, scale redimensionne les vecteurs)
     plt.quiver(X, Y, DX, DY, np.arctan2(DX, DY), cmap='rainbow', pivot='mid', scale=grid[0])
+    # Recentre selon les valeurs données
     plt.xlim(xran)
     plt.ylim(yran)
+    # Affiche la grille
     plt.grid('on')
 
 
 ## Example
 if __name__ == "__main__":
-    plotdf(xran=[-1, 3], yran=[-1, 3], grid=[50, 50])
+    afficher_champ_vecteur(xran=[-1, 3], yran=[-1, 3], grid=[50, 50])
     plt.show()
 
 

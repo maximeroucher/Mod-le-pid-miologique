@@ -1,27 +1,43 @@
 import math
 
 import matplotlib.pyplot as plt
+# Barre de progression
 from tqdm import tqdm
+import time
+import datetime
 
 
-def calcul_logistique(K, R, A, x):
-    """ Calcul de la courbe d'un fonction logistique
+def calcul_logistique(param, x):
+    """ Calcul de la courbe de la fonction logistique
     ---
     param :
 
-        - K (float)
-        - R (float)
-        - A (float)
+        - param (list(float))
         - x (float)
 
     result :
 
         - float
     """
+    assert len(param) == 3
+    K, R, A = param
     return K / (1 + A * math.exp(R * x))
 
 
-def der_log(K, R, A, x):
+def der_log(param, x):
+    """ Calcul de la courbe de la dérivée de la fonction logistique
+    ---
+    param :
+
+        - param (list(float))
+        - x (float)
+
+    result :
+
+        - float
+    """
+    assert len(param) == 3
+    K, R, A = param
     H = A * math.exp(R * x)
     return - (K * R * H) / (1 + H)**2
 
@@ -35,24 +51,20 @@ class Regression:
 
             - pts (list(str, int)) la liste des points
             - min_pts (int) le nombre minimal de points pour le calcul de la régression
+            - f (func(float -> float)) la fonction à utiliser pour la régression
         """
         self.pts = pts
         self.nb_pts = min(min_pts, len(pts))
-        self.K = 0
-        self.R = 0
-        self.A = 0
         self.f = f
 
 
-    def sq_error(self, pts, K, R, A):
+    def sq_error(self, pts, param):
         """ Calcul le carré de l'erreur
         ---
         result :
 
             - pts (list(float)) la liste en entrée
-            - K (float)
-            - R (float)
-            - A (float)
+            - param (list(float))
 
         result :
 
@@ -61,50 +73,53 @@ class Regression:
         r = 0
         d = int(len(self.pts) / self.nb_pts)
         for x in range(self.nb_pts):
-            r += (self.pts[x * d][1] - self.f(K, R, A, self.pts[x * d][0]))**2
+            r += (self.pts[x * d][1] - self.f(param, self.pts[x * d][0]))**2
         return r
 
 
-    def regression(self, minK, maxK, minR, maxR, minA, maxA, nb_iteration):
+    def regression(self, range_param, nb_iteration):
         """ Calcul la régression de le courbe donnée
         ---
         param :
 
-            - minK (float) la borne inférieure de K
-            - maxK (float) la borne supérieure de K
-            - minR (float) la borne inférieure de R
-            - maxR (float) la borne supérieure de R
-            - minA (float) la borne inférieure de A
-            - maxA (float) la borne supérieure de A
+            - param (list(float))
             - nb_iteration (int) le nombre d'itération de calcul
 
         result :
 
-            - K, R, A (float, float, float)
+            - list(float)
         """
+        print("Début de la régression")
+        t = time.perf_counter()
+        lparam = len(range_param)
+        params = [0 for _ in range(lparam)]
         minS = -1
         RANGE = 10
-        minCouple = (0, 0, 0)
-        for k in tqdm(range(nb_iteration)):
-            R = RANGE #* (nb_iteration - k)
-            dK = (maxK - minK) / R
-            dR = (maxR - minR) / R
-            dA = (maxA - minA) / R
-            for k in range(R):
-                for n in range(R):
-                    for i in range(R):
-                        err = self.sq_error(pts, minK + i * dK, minR + k * dR, minA + n * dA)
-                        if minS == -1 or minS > err:
-                            minS = err
-                            minCouple = (minK + i * dK, minR + k * dR, minA + n * dA)
-            nK, nR, nA = minCouple
-            maxK = nK + dK
-            minK = nK - dK
-            maxR = nR + dR
-            minR = nR - dR
-            maxA = nA + dA
-            minA = nA - dA
-        return minCouple
+        diff = 0
+        for k in range(nb_iteration):
+            R = RANGE
+            dparam = [(range_param[k][1] - range_param[k][0]) / R for k in range(lparam)]
+            iterations = [0 for _ in range(lparam)]
+            for _ in tqdm(range((R + 1)**lparam), leave=False):
+                p = [range_param[i][0] + iterations[i] * dparam[i] for i in range(lparam)]
+                err = self.sq_error(pts, p)
+                if minS == -1 or minS > err:
+                    minS = err
+                    params = p
+                for i in range(lparam):
+                    iterations[i] = iterations[i] + 1
+                    if iterations[i] > R:
+                        iterations[i] = 0
+                    else:
+                        break
+            for i in range(lparam):
+                range_param[i][0] = params[i] - dparam[i]
+                range_param[i][1] = params[i] + dparam[i]
+            print(f"Itération n° {k + 1}  \t Erreur : {minS} \t Différence : {abs(diff - minS)}")
+            diff = minS
+        print(
+            f"Fin de la régression, durée : {datetime.datetime.strftime(datetime.datetime.utcfromtimestamp(time.perf_counter() - t), '%H:%M:%S:%f')}")
+        return params
 
 
     def calcul_r2(self, y, x, f):
@@ -114,7 +129,7 @@ class Regression:
 
             - y (list(float)) les données en sortie
             - x (list(float)) les données en entrée
-            - f (func(float)) la fonction de regression
+            - f (func(float -> float)) la fonction de regression
 
         result :
 
@@ -126,10 +141,7 @@ class Regression:
         return 1 - Sres / Stot
 
 
-
-RANGE = 500
-REG_RANGE = 100
-
+# Données tirées de la simulation
 data = {'Sains':
     [1998, 1996, 1995, 1994, 1991, 1990, 1989, 1988, 1988, 1987, 1984, 1982, 1978, 1974, 1971, 1970, 1966, 1963, 1961, 1958, 1954, 1952, 1950, 1948, 1946, 1940, 1935, 1933, 1926, 1923, 1919, 1918, 1916, 1911, 1905, 1899, 1896,
     1888, 1887, 1880, 1877, 1871, 1868, 1858, 1853, 1844, 1837, 1832, 1823, 1813, 1800, 1791, 1786, 1780, 1776, 1769, 1763, 1756, 1746, 1739, 1731, 1717, 1711, 1705, 1700, 1689, 1681, 1675, 1669, 1662, 1660, 1659, 1652, 1641,
@@ -169,35 +181,77 @@ data = {'Sains':
 
 
 def calc_I(r, l):
+    """ Déduit la courbe de I en fonction de celle de R avec l'équation R' = l * I, l constante
+    ---
+    param :
+
+        - r (list(float)) les points de la courbe de R
+        - l (float) la constante
+
+    result :
+
+        - list(float)
+    """
     res = [0]
     for k in range(len(r) - 1):
         res.append(1 / l * (r[k + 1] - r[k]))
     return res
 
+
 def calc_S(r, i, pop):
+    """ Déduit la courbe de S en fonction de R et I car R + I + P est constant par hypothèse
+    ---
+    param :
+
+        - r (list(float)) les points de la courbe de R
+        - i (list(float)) les points de la courbe de I
+        - pop (int) la population totale de la simulation
+
+    result :
+
+        - list(float)
+    """
     return [pop - r[k] - i[k] for k in range(len(r))]
 
+
+# Nombre de points pris en compte pour la régression (le but est de pouvoir minimiser ce paramètre)
+RANGE = 500
+# Nombre de point de la régression
+NB_PTS = 100
+
+# Extrait chaque courbe des données
 s = data["Sains"]
 i = data["Infectés"]
 r = data["Rétablis"]
 
 x = list(range(len(r)))
 
+# Exttrait les données à fournir pour la régression
 px = x[0:RANGE]
-py = r[0:RANGE]
-plt.plot(x, r)
-plt.plot(s)
-plt.plot(i)
-plt.plot(px, py)
+py = r[0:RANGE] # on fait une régression sur la courbe R
+
+# Transforme les deux listes en une seule [[x0, y0], [x1, y1], ...]
 pts = list(zip(px, py))
-Reg = Regression(pts, REG_RANGE, calcul_logistique)
-nK, nR, nA = Reg.regression(0, 2000, -.1, 0, 0, 100, 10)
-err = Reg.calcul_r2(r, x, lambda x: calcul_logistique(nK, nR, nA, x))
-print(f"Regression :\n- K = {nK}\n- R = {nR}\n- A = {nA}\n- r² = {err}")
-rr = [calcul_logistique(nK, nR, nA, z) for z in x]
+
+Reg = Regression(pts, NB_PTS, calcul_logistique)
+# Calcule la régression
+nK, nR, nA = Reg.regression([[0, 2000], [-.1, 0],[0, 100]], 15)
+err = Reg.calcul_r2(r, x, lambda x: calcul_logistique([nK, nR, nA], x))
+# Calcul les points de la courbe (donc plus que sur le domaine de régression)
+rr = [calcul_logistique([nK, nR, nA], z) for z in x]
+# En déduit I
 ii = calc_I(rr, 2.5e-2)
+# En déduit S
 ss = calc_S(rr, ii, 2000)
+
+print(f"Régression :\n- K = {nK}\n- R = {nR}\n- A = {nA}\n- r² = {err}")
+
+# Affiche le tout
+plt.plot(x, r)
+# plt.plot(s)
+# plt.plot(i)
+plt.plot(px, py)
 plt.plot(x, rr)
-plt.plot(x, ii)
-plt.plot(x, ss)
+#plt.plot(x, ii)
+#plt.plot(x, ss)
 plt.show()
