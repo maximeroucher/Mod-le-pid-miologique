@@ -282,7 +282,29 @@ def RK4(h, T, y0, f):
 
 
 import numpy as np
+from matplotlib import cm
 from matplotlib import pyplot as plt
+from matplotlib.colors import LightSource
+from matplotlib.ticker import FormatStrFormatter, LinearLocator
+from mpl_toolkits.mplot3d import Axes3D
+
+
+def plot_ia(data):
+    x = range(len(data[0]))
+    y = range(len(data))
+
+    X, Y = np.meshgrid(x, y)  # `plot_surface` expects `x` and `y` data to be 2D
+
+    Z = np.array(data)
+
+    fig = plt.figure()
+
+    ax = fig.add_subplot(1, 2, 1, projection='3d')
+    ax.plot_surface(X * 30, Y * 30, Z, rstride=1, cstride=1, cmap=cm.inferno)
+
+    ax = fig.add_subplot(1, 2, 2, projection='3d')
+    ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.viridis)
+    plt.show()
 
 
 def afficher_champ_vecteur(xran, yran, grid):
@@ -304,7 +326,7 @@ def afficher_champ_vecteur(xran, yran, grid):
     # On normalise chaque vecteur
 
     # La longueur de chaque vecteur
-    M = np.hypot(DX, DY) # M est une matrice de valeur
+    M = np.hypot(DX, DY)  # M est une matrice de valeur
     # Si les longueurs sont nuls on les met à 1
     M[M == 0] = 1.
     # on normalise

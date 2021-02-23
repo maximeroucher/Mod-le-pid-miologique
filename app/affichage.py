@@ -65,8 +65,10 @@ graph = MainThread(screen, countries, c_tag, font, data_font, random.randint(0, 
 
 # Les fenêtres de menu
 try:
-    graph.tbm.connect()
-    graph.tbm.extract_model_from_db()
+    if graph.tbm.connect():
+        graph.tbm.extract_model_from_db()
+    else:
+        quit()
 except:
     quit()
 

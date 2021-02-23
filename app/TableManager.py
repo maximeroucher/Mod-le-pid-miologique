@@ -73,12 +73,15 @@ class CustomTableManager:
         if f:
             if not f.endswith(".db"):
                 messagebox.showerror("Erreur", "L'extension du fichier n'est pas correcte")
+                return False
             else:
                 self.data_base = sqlite3.connect(f, check_same_thread=False)
                 self.cursor = self.data_base.cursor()
                 self.table = self.cursor.execute(
                     "SELECT name FROM sqlite_master WHERE type='table';").fetchall()[-1][0]
                 self.connected = True
+                return True
+        return False
 
 
     def is_in(self, tag):

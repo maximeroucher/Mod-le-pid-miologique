@@ -38,7 +38,7 @@ def retrieve_data():
 
 
 def save_data(output):
-    json.dump(output, open("data3.json", "w"))
+    json.dump(output, open("data.json", "w"))
 
 
 def extract_data(data):
@@ -170,12 +170,12 @@ def extract_data2(data):
                 mrt = int(m * p / 1000000) if m is not None else 0
                 if i != 0:
                     mrt += countries[k]['days'][i - 1]['Morts']
-                    inf += countries[k]['days'][i - 1]['Infetés']
+                    inf += countries[k]['days'][i - 1]['Infectés']
                 if i > 14: #Approx°
                     inf -= inf_mem.pop(0)
                 ret = int(ttl - inf)
                 day_track['Total_cas'] = ttl
-                day_track['Infetés'] = inf
+                day_track['Infectés'] = inf
                 day_track['Rétablis'] = ret
                 day_track['Sains'] = sns
                 day_track['Morts'] = mrt
@@ -183,15 +183,30 @@ def extract_data2(data):
     return countries
 
 
-#data = json.load(open("data3.json", 'r', encoding='utf-8'))
+def create_batch(batch_size, data, type):
+    res = {}
+    nb_batch = 0
+    for k in range(len(data)):
+        key = list(data.keys())[k]
+        res[key] = []
+        for n in range(len(data[key]['days']) - batch_size):
+            r = {'x': [], 'y': []}
+            for i in range(batch_size):
+                r['x'].append(data[key]['days'][n + i][type])
+            if sum(r['x']) != 0:
+                r['y'].append(data[key]['days'][n + i + 1][type])
+                res[key].append(r)
+                nb_batch += 1
+    print(f"{nb_batch} batchs générés")
+    return res
+
+""" #data = retrieve_data()['records']
 data2 = retrieve_data2()
+save_data(data2)
 
-""" data = retrieve_data()['records']
-save_data(data)
+data = json.load(open("data.json", 'r', encoding='utf-8'))
+countries = extract_data2(data)
 
-#data = json.load(open("data.json", 'r', encoding='utf-8'))
-"""
-countries = extract_data2(data2)
-
-json_to_sql(countries)
-
+print(create_batch(20, countries, 'Infectés')['FRA'][-1])
+#json_to_sql(countries)
+ """

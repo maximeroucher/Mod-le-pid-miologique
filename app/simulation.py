@@ -507,6 +507,7 @@ while True:
 
 
 # TODO:
+#       - pt attractif
 #       - afficher reg°
 #       - opti° reg°
 

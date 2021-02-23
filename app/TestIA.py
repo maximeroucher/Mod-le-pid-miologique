@@ -24,8 +24,8 @@ def sigmoid_der(x):
 
 class RecNN:
 
-    def __init__(self, layer_dim, n, lr, name):
-        self.name = name
+    def __init__(self, layer_dim, n, lr):
+        self.nb_train = 100
         self.last_child = None
         self.parent = None
         self.child = None
@@ -35,11 +35,12 @@ class RecNN:
         self.weights = np.random.randn(self.nb_inputs, self.nb_neurons)
         self.bias = np.zeros(layer_dim[1])
         if len(layer_dim) > 2:
-            self.child = RecNN(layer_dim[1:], n + 1, lr, name)
+            self.child = RecNN(layer_dim[1:], n + 1, lr)
             self.child.parent = self
             self.last_child = self.child.last_child
         else:
             self.last_child = self
+        self.name = "struct(" + "-".join([str(x) for x in layer_dim]) + ")-lr(" + str(lr) + ")" + f"-tr({self.nb_train})"
 
 
     def __str__(self):
@@ -88,7 +89,7 @@ class RecNN:
 
 
     def load(self, filename):
-        data = json.load(open(f"./Model/{filename}.json"))
+        data = json.load(open(f"./Model/{filename}"))
         self.name = filename
         self.set_params(data)
 
@@ -101,17 +102,25 @@ class RecNN:
             self.child.set_params(data)
 
 
+    @staticmethod
+    def load_from_file(filename):
+        layer_dim = [int(x) for x in filename.split("struct(")[1].split(")")[0].split("-")]
+        lr = float(filename.split("lr(")[1].split(")")[0])
+        t = int(filename.split("tr(")[1].split(")")[0])
+        NN = RecNN(layer_dim, 0, lr)
+        NN.load(filename)
+        NN.nb_train = t
+        return NN
 
-NN = RecNN([2, 3, 1], 0, 1, uuid4())
+
+NN = RecNN.load_from_file("struct(20-30-10-1)-lr(0.001)-tr(100).json")
 print(NN.feedforward([[1, 0], [0, 1]]))
 for _ in range(10000):
     NN.train([[1, 0], [0, 1]], [[0], [1]])
 print(NN.feedforward([[1, 0], [0, 1]]))
 
-
 """
 import numpy as np
-
 
 class RecurrentNeuralNetwork:
     #input (in t), expected output (shifted by one time step), num of words (num of recurrences), array of expected outputs, learning rate
@@ -288,7 +297,6 @@ class RecurrentNeuralNetwork:
         #return all outputs
         return self.oa
 
-
 class LSTM:
     # LSTM cell (input, output, amount of recurrence, learning rate)
     def __init__(self, input, output, recurrences, learning_rate):
@@ -403,7 +411,6 @@ class LSTM:
         self.i -= self.learning_rate / np.sqrt(self.Gi + 1e-8) * iu
         self.c -= self.learning_rate / np.sqrt(self.Gc + 1e-8) * cu
         self.o -= self.learning_rate / np.sqrt(self.Go + 1e-8) * ou
-
 
 # https://wp.firrm.de/index.php/2018/04/13/building-a-lstm-network-completely-from-scratch-no-libraries/
 """
