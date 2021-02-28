@@ -2,6 +2,7 @@ import math
 import os
 import random
 import time
+from tqdm import tqdm
 from enum import Enum
 
 from tools import *
@@ -34,7 +35,7 @@ class Comportement(Enum):
 
 class Person:
 
-    def __init__(self, id, x, y, vx, vy, ax, ay, p):
+    def __init__(self, id, x, y, vx, vy, ax, ay, p, rayon):
         """ Initialisation de la personne
         ---
         param :
@@ -60,7 +61,7 @@ class Person:
         self.etat = Etat.SAIN
         self.comportement = Comportement.NORMAL
         self.VMAX = 5
-        self.RAYON = 6
+        self.RAYON = rayon
 
 
     def __eq__(self, other):
@@ -207,7 +208,7 @@ class Person:
         """ Retourne une copie de la persoone
         ---
         """
-        return Person(self.id, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.p)
+        return Person(self.id, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.p, self.RAYON)
 
 
 class Simulation:
@@ -417,8 +418,8 @@ class Simulation:
             self.split()
             self.update_comportement()
             self.update_data()
-            self.update_text()
-            self.display_country()
+            #self.update_text()
+            #self.display_country()
         else:
             if not self.ended:
                 self.ended = True
@@ -446,64 +447,68 @@ class Simulation:
 
 pygame.init()
 info = pygame.display.Info()
-screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
-screen.fill(BG)
+screen = pygame.display.set_mode((1, 1), pygame.NOFRAME)
+#screen.fill(BG)
 
 w = info.current_w // 2 - 10
 h = info.current_h - 10
 
-person = []
+
 S1 = 0
 NB_PERSON = 2000
-SAVE = False
-
-for k in range(NB_PERSON):
-    v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
-    vx, vy = v * math.cos(theta), v * math.sin(theta)
-    person.append(
-        Person(k,
-            random.randint(0, w),
-            random.randint(0, h),
-            vx, vy, 0, 0, .5))
+SAVE = True
+NB_SIM = 200
 
 
-Sim = Simulation(person, w, h, screen, 50, S1)
-Sim.init_affichage()
-x = 0
+for _ in tqdm(range(NB_SIM)):
+    person = []
+    for k in range(NB_PERSON):
+        v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
+        vx, vy = v * math.cos(theta), v * math.sin(theta)
+        person.append(
+            Person(k,
+                random.randint(0, w),
+                random.randint(0, h),
+                vx, vy, 0, 0, .5, 6))
 
 
-if SAVE:
-    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}"
-    if not os.path.exists(titre):
-        os.makedirs(titre)
-    os.chdir(titre)
-    filename = "result.db"
-    if filename in os.listdir():
-        os.remove(filename)
-    data_base = sqlite3.connect(filename, check_same_thread=False)
-    cursor = data_base.cursor()
-    cursor.execute(f"""CREATE TABLE IF NOT EXISTS Sim (id integer PRIMARY KEY, {",".join([f'{key} int' for key in Sim.data])})""")
+    Sim = Simulation(person, w, h, screen, 50, S1)
+    #Sim.init_affichage()
+    x = 0
 
 
-DATA_SAVED = False
-
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            quit()
-    time.sleep(.01)
-    Sim.update()
-    Sim.show()
     if SAVE:
-        if not Sim.ended:
-            pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}\\img{x}.jpg")
-        elif not DATA_SAVED:
-            for k in range(x):
-                cursor.execute(f"""INSERT INTO Sim VALUES (NULL, {",".join([str(Sim.data[key][k]) for key in Sim.data])})""")
-            data_base.commit()
-            data_base.close()
-            DATA_SAVED = True
-        x += 1
+        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}"
+        if not os.path.exists(titre):
+            os.makedirs(titre)
+        os.chdir(titre)
+        data_base = sqlite3.connect("result.db", check_same_thread=False)
+        cursor = data_base.cursor()
+        l = len(cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall())
+        cursor.execute(f"""CREATE TABLE IF NOT EXISTS Sim{l} (id integer PRIMARY KEY, {",".join([f'{key} int' for key in Sim.data])})""")
+
+
+    DATA_SAVED = False
+
+    while not Sim.ended:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                quit()
+        time.sleep(.01)
+        Sim.update()
+        #Sim.show()
+        if SAVE:
+            if not Sim.ended:
+                #pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}\\img{x}.jpg")
+                pass
+            elif not DATA_SAVED:
+                for k in range(x):
+                    cursor.execute(f"""INSERT INTO Sim{l} VALUES (NULL, {",".join([str(Sim.data[key][k] / NB_PERSON) for key in Sim.data])})""")
+                data_base.commit()
+                data_base.close()
+                DATA_SAVED = True
+            x += 1
 
 
 # TODO:

@@ -11,6 +11,12 @@ import requests
 
 
 def retrieve_data():
+    """ Récupère les données du site
+    ---
+    result :
+
+        - dict
+    """
     link = "https://opendata.ecdc.europa.eu/covid19/casedistribution/json/"
     print("Chargement des données")
     f = urllib.request.urlopen(link)
@@ -38,10 +44,22 @@ def retrieve_data():
 
 
 def save_data(output):
+    """ Enregistre les données
+    ---
+    param :
+
+        - output (dict)
+    """
     json.dump(output, open("data.json", "w"))
 
 
 def extract_data(data):
+    """ Extrait les données utiles pour l'étude
+    ---
+    param :
+
+        - data (dict)
+    """
     countries = {}
     for x in range(len(data) - 1, -1, -1):
         a = data[x]
@@ -72,6 +90,12 @@ def extract_data(data):
 
 
 def json_to_sql(json):
+    """ Enregistre dans une base de donnée les données fournies
+    ---
+    param :
+
+        - json (dict)
+    """
     filename = f"""out-{datetime.now().strftime("%Y:%m:%d").replace(":", "-")}.db"""
     if filename in os.listdir():
         os.remove(filename)
@@ -93,6 +117,8 @@ def json_to_sql(json):
 
 
 def get_table_tag(tag):
+    """ Donne l'équivalent SQLITE du type Python
+    """
     t = type(tag).__name__
     if t == "int":
         return "integer"
@@ -120,6 +146,12 @@ class MyProgressBar():
 
 
 def retrieve_data2():
+    """ Récupère les données du site
+    ---
+    result :
+
+        - dict
+    """
     link = "https://covid.ourworldindata.org/data/owid-covid-data.json"
     print("Chargement des données")
     f = urllib.request.urlopen(link)
@@ -147,6 +179,12 @@ def retrieve_data2():
 
 
 def extract_data2(data):
+    """ Extrait les données utiles pour l'étude
+    ---
+    param :
+
+        - data (dict)
+    """
     countries = {}
     keys = list(data.keys())
     for k in keys:
@@ -183,30 +221,10 @@ def extract_data2(data):
     return countries
 
 
-def create_batch(batch_size, data, type):
-    res = {}
-    nb_batch = 0
-    for k in range(len(data)):
-        key = list(data.keys())[k]
-        res[key] = []
-        for n in range(len(data[key]['days']) - batch_size):
-            r = {'x': [], 'y': []}
-            for i in range(batch_size):
-                r['x'].append(data[key]['days'][n + i][type])
-            if sum(r['x']) != 0:
-                r['y'].append(data[key]['days'][n + i + 1][type])
-                res[key].append(r)
-                nb_batch += 1
-    print(f"{nb_batch} batchs générés")
-    return res
-
-""" #data = retrieve_data()['records']
-data2 = retrieve_data2()
-save_data(data2)
-
-data = json.load(open("data.json", 'r', encoding='utf-8'))
+#data = retrieve_data()['records']
+data = retrieve_data2()
+save_data(data)
+#data = json.load(open("data.json", 'r', encoding='utf-8'))
 countries = extract_data2(data)
+json_to_sql(countries)
 
-print(create_batch(20, countries, 'Infectés')['FRA'][-1])
-#json_to_sql(countries)
- """

@@ -3,9 +3,9 @@ from tkinter import messagebox
 
 import easygui
 
-from Model import CustomModel
+from Model import Model
 
-class CustomTableManager:
+class TableManager:
 
     def __init__(self, countries):
         """ Gestionnaire de base de donnée pour chager les données de la simulation
@@ -108,7 +108,7 @@ class CustomTableManager:
         """
         for c in self.countries:
             if self.is_in(c.tag):
-                self.models.append(CustomModel(c, self))
+                self.models.append(Model(c, self))
 
 
     def end(self):

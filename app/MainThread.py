@@ -7,7 +7,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
 
 import pygame
 
-from TableManager import CustomTableManager
+from TableManager import TableManager
 from tools import *
 
 
@@ -47,7 +47,7 @@ class MainThread(Thread):
         self.use_db = None
         self.param = []
         #self.tbm = TableManager(countries)
-        self.tbm = CustomTableManager(countries)
+        self.tbm = TableManager(countries)
         # Les compartiments à ne pas afficher
         self.black_list = black_list
 

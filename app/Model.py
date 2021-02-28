@@ -1,4 +1,4 @@
-class CustomModel:
+class Model:
 
     def __init__(self, country, tbm):
         """ Simulation selon le modèle SIR avec l'ajout de la léthalité de la maladie
