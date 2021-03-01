@@ -1,5 +1,7 @@
 import random
 import sqlite3
+import time
+import datetime
 from tkinter import messagebox
 
 import easygui
@@ -25,6 +27,8 @@ class Trainer:
         self.table = []
         self.train_data = []
         self.test_data = []
+        self.sorted_batchs = {}
+        self.all_batchs = []
 
 
     def out_connect(self):
@@ -90,24 +94,24 @@ class Trainer:
             dict(clée de la base de donnée (str): list(dict(x : list(int), y  : list(int))))
         """
         data = self.extract_data_from_db(key)
-        res = {}
         nb_batch = 0
         for k in range(len(data)):
             key = list(data.keys())[k]
-            res[key] = []
+            self.sorted_batchs[key] = []
             for n in range(len(data[key]) - batch_size):
                 r = {'x': [], 'y': []}
                 for i in range(batch_size):
                     r['x'].append(data[key][n + i])
                 if sum(r['x']) != 0:
                     r['y'].append(data[key][n + i + 1])
-                    res[key].append(r)
+                    self.sorted_batchs[key].append(r)
                     nb_batch += 1
         print(f"{nb_batch} batchs générés")
-        return res
+        for key in self.sorted_batchs:
+            self.all_batchs += self.sorted_batchs[key]
 
 
-    def create_test_sets(self, d, batch_lenght):
+    def create_test_sets(self, batch_lenght):
         """ Créer les paquets pour l'entrainement
         ---
         param :
@@ -115,15 +119,13 @@ class Trainer:
             - d (dict) les données
             - batch_lenght (int) la longueur du paquets
         """
-        l = []
-        for key in d:
-            l += d[key]
-        random.shuffle(l)
+        random.shuffle(self.all_batchs)
         k = 0
-        while (k + 2) * batch_lenght < len(l):
-            self.train_data.append(l[k * batch_lenght: (k + 1) * batch_lenght])
+        self.train_data = []
+        while (k + 2) * batch_lenght < len(self.all_batchs):
+            self.train_data.append(self.all_batchs[k * batch_lenght: (k + 1) * batch_lenght])
             k += 1
-        self.test_data = l[k * batch_lenght:]
+        self.test_data = self.all_batchs[k * batch_lenght:]
 
 
     def extract_data_from_batch(self, batch):
@@ -144,14 +146,16 @@ class Trainer:
         return x, y
 
 
-    def train(self, nb_iteration):
+    def train(self, nb_iteration, batch_lenght):
         """ Entraine le réseau
         ---
         param :
 
             - nb_iteration (int) le nombre d'itération du réseau
         """
+        t = time.perf_counter()
         for k in range(nb_iteration):
+            T.create_test_sets(batch_lenght)
             for n in range(len(self.train_data)):
                 x, y = self.extract_data_from_batch(self.train_data[n])
                 NN.train(x, y)
@@ -162,7 +166,8 @@ class Trainer:
             print(f"Itération n° {k + 1}  \tPrécision : {(1 - e[0]) * 100}\t%")
         x, y = self.extract_data_from_batch([self.test_data[0]])
         o = NN.feedforward(x)
-        print(o[0][0] * 2000, y[0][0] * 2000)
+        print(
+            f"--- Fin de l'entrainement ---\nNombre d'itération : \t{nb_iteration}\nDurée : \t{datetime.datetime.strftime(datetime.datetime.utcfromtimestamp(time.perf_counter() - t), '%H h %M m %S s')}\nPrédiction : {o[0][0] * 2000}\t\tAtendu : {y[0][0] * 2000}")
 
 
     def extract_prediction_sequence(self, category):
@@ -185,6 +190,7 @@ class Trainer:
         res = []
         for _ in range(nb_iteration):
             n = NN.feedforward(start).tolist()[0][0]
+            n = int(n * 2000) / 2000
             res.append(n)
             start[0].pop(0)
             start[0].append(n)
@@ -193,25 +199,56 @@ class Trainer:
 
 NB_INPUT = 50
 START = 0
+TYPE = "Infectés"
 
 
 #NN = RecNN([NB_INPUT, 500, 500, 500, 500, 500, 500, 500, 50, 1], 0, 1e-3)
-NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(1000).json")
+NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(1400).json")
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
-res = T.create_batch(NB_INPUT, "Infectés")
-T.create_test_sets(res, 256)
+T.create_batch(NB_INPUT, TYPE)
 
-real = T.extract_prediction_sequence("Infectés")
+real = T.extract_prediction_sequence(TYPE)
 i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-T.train(100)
+T.train(100, 256)
+NN.save()
+
 y = T.predict(len(real) - NB_INPUT - START, i)
 
 plt.plot(x, real, label="Réel")
 plt.plot(xx, y, label=f"Après itérations")
 plt.legend()
 plt.show()
-NN.save()
+
+
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+fig, ax = plt.subplots()
+xdata, ydata = [], []
+ln, = plt.plot([], [], 'ro')
+
+
+def init():
+    ax.set_xlim(0, 2 * np.pi)
+    ax.set_ylim(-1, 1)
+    return ln,
+
+
+def update(frame):
+    print(frame)
+    xdata.append(frame)
+    ydata.append(np.sin(frame))
+    ln.set_data(xdata, ydata)
+    return ln,
+
+
+ani = FuncAnimation(fig, update, init_func=init, blit=True)
+plt.show()
+
+"""

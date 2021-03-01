@@ -11,9 +11,6 @@ os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 import pygame
 
 from MainThread import MainThread
-from Model import CustomModel
-from Pays import Pays
-from TableManager import CustomTableManager
 from tools import *
 
 # Le nombre d'images par seconde
