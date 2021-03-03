@@ -5,6 +5,7 @@ import easygui
 
 from Model import Model
 
+
 class TableManager:
 
     def __init__(self, countries):

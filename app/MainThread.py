@@ -42,6 +42,10 @@ class MainThread(Thread):
         # Pays séléctionné
         self.num_country = num_country
 
+        # Pays où débute la simulation
+        self.date_country = None
+        self.date = []
+
         ## Manager de base de donnée
 
         self.use_db = None
@@ -104,9 +108,17 @@ class MainThread(Thread):
         """
         d = {key: 0 for key in self.keys}
         self.N = 0
+        check = False
+        if self.date_country is None:
+            check = True
+            min_date = "9999-99-99"
         for n in range(len(self.models)):
             model = self.models[n]
             model.update(self.tbm, day + 1)
+            if check:
+                if model.date[-1] < min_date:
+                    self.date_country = n
+                    min_date = model.date[-1]
             for x in range(self.nb_param):
                 key = self.keys[x]
                 val = model.param_dict[key]["value"]
@@ -115,6 +127,7 @@ class MainThread(Thread):
             self.N += model.N
         for x in range(self.nb_param):
             self.world_param_dict[self.keys[x]].append(d[self.keys[x]])
+        self.date = self.models[self.date_country].date
 
 
     def change_countries(self, n):
@@ -183,9 +196,12 @@ class MainThread(Thread):
             dy = self.W / my
 
             create_mask(self.TOP, self.LEFT_1 + self.MARGIN + 2, self.WIDTH - 2 * self.MARGIN, self.HEIGHT - self.MARGIN, BG, self.screen)
-            create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 10,
-                        self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
-            create_mask(self.TOP + 10, self.LEFT_1 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+            create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_1 + self.MARGIN - 70,
+                        self.WIDTH - self.MARGIN + 90, self.MARGIN, BG, self.screen)
+            create_mask(self.TOP + 10, self.LEFT_1 - 80, 112, self.HEIGHT - self.MARGIN, BG, self.screen)
+
+            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.MARGIN - 10 + self.TOP),
+                             (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP), 2)
 
             x_coord = get_scale_value(0, mx, 10)
             if mx > 0:
@@ -211,14 +227,17 @@ class MainThread(Thread):
             pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP),
                             (self.WIDTH - self.MARGIN + 10 + self.LEFT_1, self.HAUT + self.TOP), 2)
 
-            y_coord = get_scale_value(0, my, 10)
+            y_coord = get_scale_value(0, my, 5)
             for y in y_coord:
                 X = self.MARGIN + int(y * dy)
-                d = str(round(y, 2))
+                g = int(y)
+                if g >= len(self.models[self.num_model].date):
+                    g = -1
+                d = self.models[self.num_model].date[g]
                 w, _ = self.font.size(d)
                 pygame.draw.line(self.screen, FG, (self.LEFT_1 + X, self.HAUT + self.TOP),
                                 (self.LEFT_1 + X, self.DHAUT + self.TOP), 2)
-                self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP))
+                self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_1 + X - w // 2 + 7, self.DHAUT + self.TOP + 5))
 
 
     def display_world(self):
@@ -233,10 +252,13 @@ class MainThread(Thread):
 
         create_mask(self.TOP + self.MARGIN, self.LEFT_2 + self.MARGIN + 2,
                     self.WIDTH - 2 * self.MARGIN, self.HEIGHT - 2 * self.MARGIN, BG, self.screen)
-        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 10,
-                    self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
+        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT_2 + self.MARGIN - 70,
+                    self.WIDTH - self.MARGIN + 90, self.MARGIN, BG, self.screen)
 
-        create_mask(self.TOP + 10, self.LEFT_2 - 80, 100, self.HEIGHT - self.MARGIN, BG, self.screen)
+        create_mask(self.TOP + 10, self.LEFT_2 - 80, 112, self.HEIGHT - self.MARGIN, BG, self.screen)
+
+        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
+                         (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
 
         x_coord = get_scale_value(0, mx, 10)
         for x in x_coord:
@@ -256,14 +278,17 @@ class MainThread(Thread):
             for x in range(len(pts) - 1):
                 pygame.draw.line(self.screen, self.color_dict[key], pts[x], pts[x + 1], 2)
 
-        y_coord = get_scale_value(0, my, 10)
+        y_coord = get_scale_value(0, my, 5)
         for y in y_coord:
             X = self.MARGIN + int(y * dy)
-            d = str(round(y, 2))
+            g = int(y)
+            if g >= len(self.models[self.date_country].date):
+                g = -1
+            d = self.models[self.date_country].date[g]
             w, _ = self.font.size(d)
             pygame.draw.line(self.screen, FG, (self.LEFT_2 + X, self.HAUT + self.TOP),
                              (self.LEFT_2 + X, self.DHAUT + self.TOP), 2)
-            self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_2 + X - w // 2 + 7, self.DHAUT + self.TOP))
+            self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT_2 + X - w // 2 + 7, self.DHAUT + self.TOP + 5))
 
         pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP),
                          (self.WIDTH - self.MARGIN + 10 + self.LEFT_2, self.HAUT + self.TOP), 2)
@@ -392,29 +417,6 @@ class MainThread(Thread):
             self.screen, self.font, f"Evolution locale ({self.models[self.num_model].country.name})", FG, self.WIDTH, 30,
             650, self.LEFT_1 - 5)
 
-        # Echelle du monde
-        mx = max([max(self.world_param_dict[x]) for x in self.keys])
-        dx = self.H / mx
-
-        # Droites du graphique
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, self.MARGIN - 10 + self.TOP),
-                         (self.MARGIN + self.LEFT_2, self.HAUT + self.TOP), 2)
-
-        x_coord = get_scale_value(0, mx, 10)
-        for x in x_coord:
-            form = "{:.2e}".format(int(x))
-            w = self.data_font.size(form)[0]
-            Y = self.HAUT - int(x * dx)
-            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_2, Y + self.TOP),
-                             (self.MARGIN - 5 + self.LEFT_2, Y + self.TOP), 2)
-            self.screen.blit(
-                self.data_font.render(form, True, FG),
-                ((self.MARGIN - w) + self.LEFT_2 - 10, Y - 10 + self.TOP))
-
-        # Pays
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT_1, self.MARGIN - 10 + self.TOP),
-                         (self.MARGIN + self.LEFT_1, self.HAUT + self.TOP), 2)
-
 
     def init_model(self):
         """ Initialise les paramètres d'affichage
@@ -457,12 +459,10 @@ class MainThread(Thread):
         self.init_model()
         self.update_world()
         self.change_countries(self.num_country)
-        #if not self.use_db:
-        #self.tbm.save_model_param()
         x = 0
         self.init_affichage()
         self.gen_data(x)
-        while x < self.nb_iterations[self.num_model]:
+        while x < self.nb_iterations[self.num_model] or self.date[-1] != self.models[self.num_country].date[-1]:
             x += 1
             self.y.append(len(self.y))
             self.gen_data(x)

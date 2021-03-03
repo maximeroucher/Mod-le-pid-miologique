@@ -18,6 +18,7 @@ class Model:
         self.N = data[-2]
         self.param_dict = {self.param_list[x]: {"value": data[x], "color": cols[x]}
                            for x in range(len(self.param_list))}
+        self.date = []
 
 
     def update(self, tbm, jour):
@@ -30,5 +31,6 @@ class Model:
         """
         res = tbm.get_country_data_by_id(jour, self.tag)
         if res is not None:
+            self.date.append(res[0])
             for k, x in enumerate(res[1:]):
                 self.param_dict[self.param_list[k]]["value"] = x

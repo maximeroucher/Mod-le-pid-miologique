@@ -126,6 +126,5 @@ while True:
 
 # TODO:
 #       - afficher reg à gch (+ delta)
-#       - mettre date abscisse
 #       - estimation tps calcul
 #       - IA classique + LSTM

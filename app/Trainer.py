@@ -1,14 +1,14 @@
+import datetime
 import random
 import sqlite3
 import time
-import datetime
 from tkinter import messagebox
 
 import easygui
 import numpy as np
+from matplotlib import pyplot as plt
 
 from RecNN import RecNN
-from matplotlib import pyplot as plt
 
 
 class Trainer:
@@ -171,26 +171,38 @@ class Trainer:
 
 
     def extract_prediction_sequence(self, category):
+        """ Récupère une liste de donnée d'une simulation choisie aléatoirement
+        ---
+        param :
+
+            - category (str) la catégorie dont on doit tirer les données
+
+        result :
+
+            list(float)
+        """
         key = random.choice(self.table)
         return [x[0] for x in self.cursor.execute(f"SELECT {category} from '{key}'").fetchall()]
 
 
-    def predict(self, nb_iteration, start):
+    def predict(self, nb_iteration, start, NN=None):
         """ Lance une prédiction d'évolution en fonction de l'entrée sur un nombre d'itération donné
         ---
         param :
 
             - nb_iteration (int) le nombre d'itération
             - start ([list(float)]) les données en entrée
+            - NN (RecNN) le réseau à tester (par défaut self.NN)
 
         result :
 
             list(float)
         """
+        NN = self.NN if NN is None else NN
         res = []
         for _ in range(nb_iteration):
             n = NN.feedforward(start).tolist()[0][0]
-            n = int(n * 2000) / 2000
+            #n = int(n * 2000) / 2000
             res.append(n)
             start[0].pop(0)
             start[0].append(n)
@@ -203,7 +215,12 @@ TYPE = "Infectés"
 
 
 #NN = RecNN([NB_INPUT, 500, 500, 500, 500, 500, 500, 500, 50, 1], 0, 1e-3)
-NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(1400).json")
+
+NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(3300).json")
+
+#NN2 = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(2000).json")
+#NN1 = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(1000).json")
+
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
 T.create_batch(NB_INPUT, TYPE)
@@ -213,16 +230,28 @@ i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
+
 T.train(100, 256)
 NN.save()
 
-y = T.predict(len(real) - NB_INPUT - START, i)
+
+y3 = T.predict(len(real) - NB_INPUT - START, i)
+
+#y2 = T.predict(len(real) - NB_INPUT - START, i, NN2)
+#y1 = T.predict(len(real) - NB_INPUT - START, i, NN1)
 
 plt.plot(x, real, label="Réel")
-plt.plot(xx, y, label=f"Après itérations")
+
+#plt.plot(xx, y1, label=f"Après 1000 itérations")
+#plt.plot(xx, y2, label=f"Après 2000 itérations")
+
+plt.plot(xx, y3, label=f"Après 3000 itérations")
 plt.legend()
 plt.show()
 
+
+# TODO:
+#       - matplotlib
 
 """
 import numpy as np

@@ -1,6 +1,5 @@
 import json
 import os
-from uuid import uuid4
 
 import numpy as np
 

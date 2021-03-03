@@ -5,7 +5,6 @@ import urllib.request
 from datetime import datetime
 
 import progressbar
-import requests
 
 #data2 = json.load(open("data2.json", 'r', encoding='utf-8'))
 
