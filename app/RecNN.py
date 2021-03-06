@@ -60,7 +60,6 @@ def sigmoid_der(x):
     return x * (1 - x)
 
 
-
 # https://dustinstansbury.github.io/theclevermachine/derivation-backpropagation
 
 class RecNN:
@@ -226,13 +225,6 @@ class RecNN:
         NN.nb_train = t
         return NN
 
-
-if __name__ == "__main__":
-    NN = RecNN.load_from_file("struct(20-30-10-1)-lr(0.001)-tr(100).json")
-    print(NN.feedforward([[1, 0], [0, 1]]))
-    for _ in range(10000):
-        NN.train([[1, 0], [0, 1]], [[0], [1]])
-    print(NN.feedforward([[1, 0], [0, 1]]))
 
 """
 import numpy as np

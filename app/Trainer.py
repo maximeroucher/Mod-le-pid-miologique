@@ -153,6 +153,7 @@ class Trainer:
 
             - nb_iteration (int) le nombre d'itération du réseau
         """
+        err_list = []
         t = time.perf_counter()
         for k in range(nb_iteration):
             T.create_test_sets(batch_lenght)
@@ -209,6 +210,27 @@ class Trainer:
         return res
 
 
+    def compare(self, n):
+        """ Compare différents modèles
+        ---
+        param :
+
+            - n (int) le nombre de modèle à comparer
+        """
+        real = T.extract_prediction_sequence(TYPE)
+        x = list(range(len(real)))
+        xx = x[START + NB_INPUT:]
+        plt.plot(x, real, label="Réel")
+        for k in range(n):
+            i = [real[START:START + NB_INPUT]]
+            NN = RecNN.load_from_file(f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({k + 1}000).json")
+            y = T.predict(len(real) - NB_INPUT - START, i, NN)
+            plt.plot(xx, y, label=f"Après {k + 1}000 itérations")
+            plt.legend()
+        plt.show()
+
+
+
 NB_INPUT = 50
 START = 0
 TYPE = "Infectés"
@@ -216,68 +238,33 @@ TYPE = "Infectés"
 
 #NN = RecNN([NB_INPUT, 500, 500, 500, 500, 500, 500, 500, 50, 1], 0, 1e-3)
 
-NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(3300).json")
-
-#NN2 = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(2000).json")
-#NN1 = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(1000).json")
+NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(6400).json")
 
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
 T.create_batch(NB_INPUT, TYPE)
+
+#T.compare(6)
+
 
 real = T.extract_prediction_sequence(TYPE)
 i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
+for _ in range(7):
+    T.train(100, 256)
+    NN.save()
 
-T.train(100, 256)
-NN.save()
-
-
-y3 = T.predict(len(real) - NB_INPUT - START, i)
-
-#y2 = T.predict(len(real) - NB_INPUT - START, i, NN2)
-#y1 = T.predict(len(real) - NB_INPUT - START, i, NN1)
+y = T.predict(len(real) - NB_INPUT - START, i)
 
 plt.plot(x, real, label="Réel")
-
-#plt.plot(xx, y1, label=f"Après 1000 itérations")
-#plt.plot(xx, y2, label=f"Après 2000 itérations")
-
-plt.plot(xx, y3, label=f"Après 3000 itérations")
+plt.plot(xx, y, label="Après itérations")
 plt.legend()
 plt.show()
 
 
+
 # TODO:
-#       - matplotlib
-
-"""
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-
-fig, ax = plt.subplots()
-xdata, ydata = [], []
-ln, = plt.plot([], [], 'ro')
-
-
-def init():
-    ax.set_xlim(0, 2 * np.pi)
-    ax.set_ylim(-1, 1)
-    return ln,
-
-
-def update(frame):
-    print(frame)
-    xdata.append(frame)
-    ydata.append(np.sin(frame))
-    ln.set_data(xdata, ydata)
-    return ln,
-
-
-ani = FuncAnimation(fig, update, init_func=init, blit=True)
-plt.show()
-
-"""
+#   - test s/ nvl sim
+#   - comparer != modèles

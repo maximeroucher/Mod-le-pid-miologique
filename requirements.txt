@@ -1,6 +1,0 @@
-easygui==0.98.1
-Shapely==1.7.0
-dbfread==2.0.7
-pygame==1.9.6
-matplotlib==3.0.3
-pyshp==2.1.2
