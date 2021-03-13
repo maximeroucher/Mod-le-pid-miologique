@@ -221,11 +221,11 @@ class Trainer:
         x = list(range(len(real)))
         xx = x[START + NB_INPUT:]
         plt.plot(x, real, label="Réel")
-        for k in range(n):
+        for k in range(n // 2):
             i = [real[START:START + NB_INPUT]]
-            NN = RecNN.load_from_file(f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({k + 1}000).json")
+            NN = RecNN.load_from_file(f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({2 * (k + 1)}000).json")
             y = T.predict(len(real) - NB_INPUT - START, i, NN)
-            plt.plot(xx, y, label=f"Après {k + 1}000 itérations")
+            plt.plot(xx, y, label=f"Après {2 * (k + 1)}000 itérations")
             plt.legend()
         plt.show()
 
@@ -238,13 +238,13 @@ TYPE = "Infectés"
 
 #NN = RecNN([NB_INPUT, 500, 500, 500, 500, 500, 500, 500, 50, 1], 0, 1e-3)
 
-NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(6400).json")
+NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(9700).json")
 
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
 T.create_batch(NB_INPUT, TYPE)
 
-#T.compare(6)
+#T.compare(9)
 
 
 real = T.extract_prediction_sequence(TYPE)
@@ -252,7 +252,7 @@ i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-for _ in range(7):
+for _ in range(8):
     T.train(100, 256)
     NN.save()
 
@@ -262,7 +262,6 @@ plt.plot(x, real, label="Réel")
 plt.plot(xx, y, label="Après itérations")
 plt.legend()
 plt.show()
-
 
 
 # TODO:

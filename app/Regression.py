@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 # Barre de progression
 from tqdm import tqdm
 import time
+import numpy as np
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator
+from mpl_toolkits.mplot3d import Axes3D
 import datetime
 
 
@@ -214,6 +218,21 @@ def calc_S(r, i, pop):
     return [pop - r[k] - i[k] for k in range(len(r))]
 
 
+def calcul_cst(i, s):
+    a = sum([math.log(s[k]) ** 2 for k in range(len(s))])
+    b = len(s)
+    c = 2 * sum([math.log(s[k]) for k in range(len(s))])
+    d = 2 * sum([(i[k] - s[k]) * math.log(s[k]) for k in range(len(s))])
+    e = 2 * sum([(i[k] - s[k]) for k in range(len(s))])
+    return a, b, c, d, e
+
+
+def calcul_l_mu(a, b, c, d, e):
+    l = 4 * d * b - c * e
+    mu = (2 * a * e - d * c) / (c ** 2 - 4 * a * b)
+    return l, mu
+
+
 # Nombre de points pris en compte pour la régression (le but est de pouvoir minimiser ce paramètre)
 RANGE = 500
 # Nombre de point de la régression
@@ -224,6 +243,28 @@ s = data["Sains"]
 i = data["Infectés"]
 r = data["Rétablis"]
 
+cst = calcul_cst(i[:500], s[:500])
+print(cst)
+a, b, c, d, e = cst
+
+calcul_surf = lambda x, y : a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
+
+
+# Make data.
+X = np.arange(-250000, 250000, 10000)
+Y = np.arange(-1000000, 1000000, 10000)
+X, Y = np.meshgrid(X, Y)
+Z = calcul_surf(X, Y)
+
+
+fig = plt.figure()
+ax = fig.gca(projection='3d')
+surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.rainbow,
+                       linewidth=0, antialiased=False)
+
+plt.show()
+
+""" 
 x = list(range(len(r)))
 
 # Exttrait les données à fournir pour la régression
@@ -255,3 +296,4 @@ plt.plot(x, rr)
 #plt.plot(x, ii)
 #plt.plot(x, ss)
 plt.show()
+ """

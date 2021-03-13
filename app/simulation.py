@@ -62,6 +62,8 @@ class Person:
         self.comportement = Comportement.NORMAL
         self.VMAX = 5
         self.RAYON = rayon
+        self.f = 1e-4
+        self.k = 1e-4
 
 
     def __eq__(self, other):
@@ -94,12 +96,12 @@ class Person:
             - h (int) la hauteur de l'espace de simulation
             - person (list(Person)) la liste des personnes de la simulation
         """
+        self.ax = self.ay = 0
         if self.comportement == Comportement.QUARANTAINE:
             self.repulsion(person)
-        self.correction_vitesse()
-        self.ax = self.ay = 0
         self.vx += self.ax
         self.vy += self.ay
+        self.correction_vitesse()
         if self.x > w or self.x < 0:
             self.vx = - self.vx
         if self.y > h or self.y < 0:
@@ -145,7 +147,7 @@ class Person:
         self.VMAX = 2
 
 
-    def repulsion(self, person): #TODO:
+    def repulsion(self, person):
         """ Calcule une force de répulsion entre les autres particules et celle-ci, dans le cas d'un confinement
         ---
         param :
@@ -156,15 +158,17 @@ class Person:
         for other in person:
             if other is not self:
                 dx = abs(self.x - other.x)
-                if dx < 20 * self.RAYON:
+                if dx < 5 * self.RAYON:
                     dy = abs(self.y - other.y)
-                    if dy < 20 * self.RAYON:
-                        ndx = abs(self.x + self.vx - other.x - other.vx)
-                        ndy = abs(self.y + self.vy - other.y - other.vy)
-                        r = dx ** 2 + dy ** 2 + 1e-9
-                        pos = self.position(other)
-                        ax += dx ** 2 / r
-                        ay += dy ** 2 / r
+                    if dy < 5 * self.RAYON:
+                        fx = self.k * (20 * self.RAYON - dx) ** 2 - self.f * self.vx
+                        fy = self.k * (20 * self.RAYON - dy) ** 2 - self.f * self.vy
+                        if self.x < other.x:
+                            fx = - fx
+                        if self.y < other.y:
+                            fy = - fy
+                        ax += fx
+                        ay += fy
         self.ax = ax
         self.ay = ay
 
@@ -418,8 +422,8 @@ class Simulation:
             self.split()
             self.update_comportement()
             self.update_data()
-            #self.update_text()
-            #self.display_country()
+            self.update_text()
+            self.display_country()
         else:
             if not self.ended:
                 self.ended = True
@@ -436,31 +440,31 @@ class Simulation:
                 self.quarantine_time.append(self.y[-1])
                 for p in self.person:
                     p.comportement = Comportement.QUARANTAINE
-                    p.start_quarantine()
+                    #p.start_quarantine()
             elif len(self.infectes) < self.TAUX_INCIDENCE * .9 and self.comportement == Comportement.QUARANTAINE:
                 self.comportement = Comportement.NORMAL
                 for p in self.person:
                     p.comportement = Comportement.NORMAL
-                    p.end_quarantine()
+                    #p.end_quarantine()
                     self.quarantine_time.append(self.y[-1])
 
 
 pygame.init()
 info = pygame.display.Info()
-screen = pygame.display.set_mode((1, 1), pygame.NOFRAME)
-#screen.fill(BG)
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
+screen.fill(BG)
 
 w = info.current_w // 2 - 10
 h = info.current_h - 10
 
 
-S1 = 0
-NB_PERSON = 2000
-SAVE = True
-NB_SIM = 200
+S = 50
+NB_PERSON = 600
+SAVE = False
+NB_SIM = 1
 
 
-for _ in tqdm(range(NB_SIM)):
+for _ in range(NB_SIM):
     person = []
     for k in range(NB_PERSON):
         v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
@@ -469,16 +473,16 @@ for _ in tqdm(range(NB_SIM)):
             Person(k,
                 random.randint(0, w),
                 random.randint(0, h),
-                vx, vy, 0, 0, .5, 6))
+                vx, vy, 0, 0, .5, 10))
 
 
-    Sim = Simulation(person, w, h, screen, 50, S1)
-    #Sim.init_affichage()
+    Sim = Simulation(person, w, h, screen, 50, S)
+    Sim.init_affichage()
     x = 0
 
 
     if SAVE:
-        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}"
+        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S}"
         if not os.path.exists(titre):
             os.makedirs(titre)
         os.chdir(titre)
@@ -497,10 +501,10 @@ for _ in tqdm(range(NB_SIM)):
                 quit()
         time.sleep(.01)
         Sim.update()
-        #Sim.show()
+        Sim.show()
         if SAVE:
             if not Sim.ended:
-                #pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S1}\\img{x}.jpg")
+                pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S}\\img{x}.jpg")
                 pass
             elif not DATA_SAVED:
                 for k in range(x):

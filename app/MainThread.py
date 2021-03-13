@@ -373,9 +373,12 @@ class MainThread(Thread):
         x, y = pygame.mouse.get_pos()
         # Si la souris est sur le graphique pays
         if in_rect(self.COUNTRY_GRAPH_BOUND, x, y):
+            a = int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))
+            if a >= len(self.models[self.num_model].date):
+                a = -1
             center_text(
                 self.screen, self.data_font,
-                f"x : {int((x - self.COUNTRY_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))}",
+                f"x : {self.models[self.num_model].date[a]}",
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
@@ -385,9 +388,12 @@ class MainThread(Thread):
 
         # Si la souris est sur le graphique mondial
         elif in_rect(self.WORLD_GRAPH_BOUND, x, y):
+            a = int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))
+            if a >= len(self.date):
+                a = -1
             center_text(
                 self.screen, self.data_font,
-                f"x : {int((x - self.WORLD_GRAPH_BOUND[0]) * self.COEF_WIDTH * len(self.world_param_dict[self.keys[0]]))}",
+                f"x : {self.date[a]}",
                 FG, 150, 50, 600, 15)
             center_text(
                 self.screen, self.data_font, "y : {:.2e}".format(
