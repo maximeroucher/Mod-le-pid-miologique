@@ -1,5 +1,8 @@
 import json
+import msgpack
 import os
+
+from numba import njit
 
 import numpy as np
 
@@ -31,7 +34,7 @@ def relu_der(x):
     """
     return 0 if x <= 0 else 1
 
-
+@njit
 def sigmoid(x):
     """ La fonction sigmoid
     ---
@@ -45,7 +48,7 @@ def sigmoid(x):
     """
     return 1 / (1 + np.exp(-x))
 
-
+@njit
 def sigmoid_der(x):
     """ La dérivé de la fonction sigmoid (x = sigmoid(y))
     ---
@@ -58,6 +61,21 @@ def sigmoid_der(x):
         float
     """
     return x * (1 - x)
+
+
+def _feedforward(entry, weights, bias):
+    return sigmoid(np.dot(entry, weights) + bias)
+
+
+@njit
+def _correct(err, input, weights, bias, lr, activations):
+    err = np.multiply(err, sigmoid_der(activations))
+    d_weights = np.dot(input.T, err)
+    d_bias = d_weights.sum(axis=0)
+    n_err = np.dot(err, weights.T)
+    weights += lr * d_weights
+    bias += lr * d_bias
+    return weights, bias, n_err
 
 
 # https://dustinstansbury.github.io/theclevermachine/derivation-backpropagation
@@ -83,6 +101,7 @@ class RecNN:
         self.weights = np.random.randn(self.nb_inputs, self.nb_neurons)
         self.bias = np.zeros(layer_dim[1])
         self.layer_dim = layer_dim
+        self.use_json = False
         if len(layer_dim) > 2:
             self.child = RecNN(layer_dim[1:], n + 1, lr)
             self.child.parent = self
@@ -115,8 +134,8 @@ class RecNN:
 
             list(list(float))
         """
-        self.input = np.array(entry)
-        self.activations = sigmoid(np.dot(entry, self.weights) + self.bias)
+        self.input = entry
+        self.activations = _feedforward(entry, self.weights, self.bias)
         if not self.child:
             return self.activations
         return self.child.feedforward(self.activations)
@@ -129,12 +148,7 @@ class RecNN:
 
             - err (list(list(float)), dim = layer_dim[-1]) l'erreur commise par le réseau
         """
-        err = np.multiply(err, sigmoid_der(self.activations))
-        d_weights = np.dot(self.input.T, err)
-        d_bias = d_weights.sum(axis=0)
-        n_err = np.dot(err, self.weights.T)
-        self.weights += self.lr * d_weights
-        self.bias += self.lr * d_bias
+        self.weights, self.bias, n_err = _correct(err, self.input, self.weights, self.bias, self.lr, self.activations)
         if self.parent:
             self.parent.backprop(n_err)
 
@@ -147,7 +161,7 @@ class RecNN:
             - x (list(list(float))) les données en entrée du réseau
             - y (list(list(float))) les données attendue en fin de réseau
         """
-        o = self.feedforward(x)
+        o = self.feedforward(np.array(x))
         d_err = 2 * (y - o)
         self.last_child.backprop(d_err)
 
@@ -169,18 +183,24 @@ class RecNN:
         return self.child.save_aux(data)
 
 
-    def save(self):
+    def save(self, use_json=True):
         """ Enregistre le réseau
         ---
         """
         if not os.path.exists("./Model"):
             os.makedirs("./Model")
-        json.dump(self.save_aux({'lr': self.lr}), open(f"./Model/{self.get_name()}", "w"))
+        data = self.save_aux({'lr': self.lr})
+        if self.use_json:
+            json.dump(data, open(f"./Model/{self.get_name()}.json", "w"))
+        else:
+            with open(f"./Model/{self.get_name()}.msgpack", "wb") as outfile:
+                packed = msgpack.packb(data)
+                outfile.write(packed)
 
 
     def get_name(self):
         return "struct(" + "-".join([str(x) for x in self.layer_dim]
-                                         ) + ")-lr(" + str(self.lr) + ")" + f"-tr({self.nb_train}).json"
+                                         ) + ")-lr(" + str(self.lr) + ")" + f"-tr({self.nb_train})"
 
 
     def load(self, filename):
@@ -190,7 +210,13 @@ class RecNN:
 
             - filename (str) le nom du fichier
         """
-        data = json.load(open(filename))
+        if filename.endswith(".json"):
+            data = json.load(open(filename))
+            self.json = True
+        elif filename.endswith(".msgpack"):
+            with open(filename, "rb") as data_file:
+                byte_data = data_file.read()
+                data = msgpack.unpackb(byte_data)
         self.name = os.path.basename(filename)
         self.set_params(data)
 

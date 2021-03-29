@@ -1,3 +1,4 @@
+from __future__ import print_function
 import math
 
 import matplotlib.pyplot as plt
@@ -218,23 +219,38 @@ def calc_S(r, i, pop):
     return [pop - r[k] - i[k] for k in range(len(r))]
 
 
-def calcul_cst(i, s):
-    a = sum([math.log(s[k]) ** 2 for k in range(len(s))])
-    b = len(s)
-    c = 2 * sum([math.log(s[k]) for k in range(len(s))])
-    d = 2 * sum([(i[k] - s[k]) * math.log(s[k]) for k in range(len(s))])
-    e = 2 * sum([(i[k] - s[k]) for k in range(len(s))])
-    return a, b, c, d, e
+def calcul_cst_grad(i, b, l, mu):
+    a, c, d, e = 0, 0, 0, 0
+    for k in range(len(s)):
+        if mu + l * math.log(s[k]) - s[k] >= 0:
+            lk = math.log(s[k])
+            a += lk ** 2
+            c += lk
+            d -= (i[k] + s[k]) * lk
+            e += s[k] - i[k]
+    return a, len(s), 2 * c, 2 * d, 2 * e
 
 
-def calcul_l_mu(a, b, c, d, e):
-    l = 4 * d * b - c * e
-    mu = (2 * a * e - d * c) / (c ** 2 - 4 * a * b)
-    return l, mu
+def calc_grad(l, mu, i, s):
+    a, b, c, d, e = calcul_cst_grad(i, s, l, mu)
+    return (2 * a * l + c * mu + d, c * l + 2 * b * mu + e)
+
+
+def remonte_gradient(l1, mu1, i, s, step):
+    last = [l1, mu1]
+    new = [l1, mu1]
+    x = 0
+    while last[0] - new[0] + last[1] - new[1] > 0 or x == 0:
+        grad = calc_grad(new[0], new[1], i, s)
+        last = [new[0], new[1]]
+        new[0] = new[0] - step * grad[0]
+        new[1] = new[1] - step * grad[1]
+        x += 1
+    return last
 
 
 # Nombre de points pris en compte pour la régression (le but est de pouvoir minimiser ce paramètre)
-RANGE = 500
+RANGE = 5
 # Nombre de point de la régression
 NB_PTS = 100
 
@@ -243,16 +259,13 @@ s = data["Sains"]
 i = data["Infectés"]
 r = data["Rétablis"]
 
-cst = calcul_cst(i[:500], s[:500])
-print(cst)
-a, b, c, d, e = cst
+print(remonte_gradient(.01, 100, i, s, 1e-4))
 
+"""
 calcul_surf = lambda x, y : a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
 
-
-# Make data.
-X = np.arange(-250000, 250000, 10000)
-Y = np.arange(-1000000, 1000000, 10000)
+X = np.arange(0, 2500, 100)
+Y = np.arange(0, 1000, 100)
 X, Y = np.meshgrid(X, Y)
 Z = calcul_surf(X, Y)
 
@@ -263,6 +276,7 @@ surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.rainbow,
                        linewidth=0, antialiased=False)
 
 plt.show()
+"""
 
 """ 
 x = list(range(len(r)))
@@ -276,7 +290,7 @@ pts = list(zip(px, py))
 
 Reg = Regression(pts, NB_PTS, calcul_logistique)
 # Calcule la régression
-nK, nR, nA = Reg.regression([[0, 2000], [-.1, 0],[0, 100]], 15)
+nK, nR, nA = Reg.regression([[0, 2000], [-.1, 0], [0, 100]], 15)
 err = Reg.calcul_r2(r, x, lambda x: calcul_logistique([nK, nR, nA], x))
 # Calcul les points de la courbe (donc plus que sur le domaine de régression)
 rr = [calcul_logistique([nK, nR, nA], z) for z in x]

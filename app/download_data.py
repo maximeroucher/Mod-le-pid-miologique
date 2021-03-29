@@ -1,4 +1,5 @@
 import json
+import msgpack
 import os
 import sqlite3
 import urllib.request
@@ -49,7 +50,9 @@ def save_data(output):
 
         - output (dict)
     """
-    json.dump(output, open("data.json", "w"))
+    with open("data.msgpack", "wb") as outfile:
+        packed = msgpack.packb(output)
+        outfile.write(packed)
 
 
 def extract_data(data):

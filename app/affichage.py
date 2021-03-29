@@ -1,4 +1,5 @@
 import json
+import msgpack
 import os
 import random
 import time
@@ -30,8 +31,11 @@ BTN_BOUND = [40, 590, 110, 520]
 
 
 ### Outils
+with open("Country.msgpack", "rb") as data_file:
+    byte_data = data_file.read()
+    data = msgpack.unpackb(byte_data)
 
-countries = from_json(json.load(open("Country.json")))
+countries = from_json(data)
 countries.sort()
 
 pygame.init()
@@ -122,7 +126,6 @@ while True:
         graph.update(back_arrow)
 
     pygame.display.update()
-
 
 # TODO:
 #       - afficher reg à gch (+ delta)

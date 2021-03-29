@@ -203,14 +203,14 @@ class Trainer:
         res = []
         for _ in range(nb_iteration):
             n = NN.feedforward(start).tolist()[0][0]
-            #n = int(n * 2000) / 2000
+            n = int(n * 2000) / 2000
             res.append(n)
             start[0].pop(0)
             start[0].append(n)
         return res
 
 
-    def compare(self, n):
+    def compare(self, n, ecart):
         """ Compare différents modèles
         ---
         param :
@@ -221,11 +221,14 @@ class Trainer:
         x = list(range(len(real)))
         xx = x[START + NB_INPUT:]
         plt.plot(x, real, label="Réel")
-        for k in range(n // 2):
+        for k in range(n // ecart):
             i = [real[START:START + NB_INPUT]]
-            NN = RecNN.load_from_file(f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({2 * (k + 1)}000).json")
+            # struct(30-100-50-1)-lr(0.001)-tr(32000).msgpack
+            # f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({2 * (k + 1)}000).json"
+            # struct(50-100-100-100-50-1)-lr(0.001)-tr(9400).msgpack
+            NN = RecNN.load_from_file(f"./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr({ecart * (k + 1)}000).msgpack")
             y = T.predict(len(real) - NB_INPUT - START, i, NN)
-            plt.plot(xx, y, label=f"Après {2 * (k + 1)}000 itérations")
+            plt.plot(xx, y, label=f"Après {ecart * (k + 1)}000 itérations")
             plt.legend()
         plt.show()
 
@@ -236,15 +239,18 @@ START = 0
 TYPE = "Infectés"
 
 
-#NN = RecNN([NB_INPUT, 500, 500, 500, 500, 500, 500, 500, 50, 1], 0, 1e-3)
+#NN = RecNN([NB_INPUT, 100, 100, 100, 50, 1], 0, 1e-3)
 
-NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(9700).json")
+# ./Model/struct(30-100-50-1)-lr(0.001)-tr(32000).msgpack marche pas bien du tout ~ 2 min
+# ./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(17600).json ~ 60 min
+# ./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(9400).msgpack peut le faire ~ 6 min (à voir)
+NN = RecNN.load_from_file("./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(9500).msgpack")
 
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
 T.create_batch(NB_INPUT, TYPE)
 
-#T.compare(9)
+T.compare(9, 2)
 
 
 real = T.extract_prediction_sequence(TYPE)
@@ -252,9 +258,10 @@ i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-for _ in range(8):
-    T.train(100, 256)
+""" for _ in range(200):
+    T.train(100, 512)
     NN.save()
+ """
 
 y = T.predict(len(real) - NB_INPUT - START, i)
 

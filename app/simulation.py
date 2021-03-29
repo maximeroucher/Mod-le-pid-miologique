@@ -473,7 +473,7 @@ for _ in range(NB_SIM):
             Person(k,
                 random.randint(0, w),
                 random.randint(0, h),
-                vx, vy, 0, 0, .5, 10))
+                vx, vy, 0, 0, .5, 6))
 
 
     Sim = Simulation(person, w, h, screen, 50, S)
@@ -519,6 +519,7 @@ for _ in range(NB_SIM):
 #       - pt attractif
 #       - afficher reg°
 #       - opti° reg°
+#       - Numba
 
 # pb test
 # https://jamanetwork.com/journals/jama/fullarticle/2762130
