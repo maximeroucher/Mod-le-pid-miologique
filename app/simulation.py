@@ -161,8 +161,8 @@ class Person:
                 if dx < 5 * self.RAYON:
                     dy = abs(self.y - other.y)
                     if dy < 5 * self.RAYON:
-                        fx = self.k * (20 * self.RAYON - dx) ** 2 - self.f * self.vx
-                        fy = self.k * (20 * self.RAYON - dy) ** 2 - self.f * self.vy
+                        fx = self.k * (20 * self.RAYON - dx) - self.f * self.vx
+                        fy = self.k * (20 * self.RAYON - dy) - self.f * self.vy
                         if self.x < other.x:
                             fx = - fx
                         if self.y < other.y:

@@ -98,7 +98,7 @@ def json_to_sql(json):
 
         - json (dict)
     """
-    filename = f"""out-{datetime.now().strftime("%Y:%m:%d").replace(":", "-")}.db"""
+    filename = f"""Epidémie-COVID-{datetime.now().strftime("%Y:%m:%d").replace(":", "-")}.db"""
     if filename in os.listdir():
         os.remove(filename)
     data_base = sqlite3.connect(filename, check_same_thread=False)

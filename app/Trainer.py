@@ -239,18 +239,19 @@ START = 0
 TYPE = "Infectés"
 
 
-#NN = RecNN([NB_INPUT, 100, 100, 100, 50, 1], 0, 1e-3)
+#NN = RecNN([NB_INPUT, 100, 100, 100, 100, 100, 50, 1], 0, 1e-3)
 
 # ./Model/struct(30-100-50-1)-lr(0.001)-tr(32000).msgpack marche pas bien du tout ~ 2 min
 # ./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(17600).json ~ 60 min
-# ./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(9400).msgpack peut le faire ~ 6 min (à voir)
-NN = RecNN.load_from_file("./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(9500).msgpack")
+# ./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(38800).msgpack peut le faire ~ 3/4 min
+# ./Model/struct(50-100-100-100-100-100-50-1)-lr(0.001)-tr(7000).msgpack
+NN = RecNN.load_from_file("./Model/struct(50-100-100-100-100-100-50-1)-lr(0.001)-tr(9500).msgpack")
 
 T = Trainer(NN)
 T.in_connect("./Simulation-0/result.db")
 T.create_batch(NB_INPUT, TYPE)
 
-T.compare(9, 2)
+#T.compare(38, 4)
 
 
 real = T.extract_prediction_sequence(TYPE)
@@ -258,10 +259,10 @@ i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-""" for _ in range(200):
+for _ in range(300):
     T.train(100, 512)
     NN.save()
- """
+
 
 y = T.predict(len(real) - NB_INPUT - START, i)
 

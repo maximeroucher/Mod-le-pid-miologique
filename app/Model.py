@@ -29,8 +29,11 @@ class Model:
             - tbm (TableManager) un gestionnaire de base de donnée
             - jour (int) l'id du jour dans la base de donnée
         """
-        res = tbm.get_country_data_by_id(jour, self.tag)
-        if res is not None:
-            self.date.append(res[0])
-            for k, x in enumerate(res[1:]):
-                self.param_dict[self.param_list[k]]["value"] = x
+        res = tbm.get_country_data_by_day(jour, self.tag)
+        self.date.append(res[0])
+        for k, x in enumerate(res[1:]):
+            self.param_dict[self.param_list[k]]["value"] = x
+
+
+    def get_day_with_id(self, tbm, id):
+        return tbm.get_day_with_id(id, self.tag)

@@ -112,13 +112,17 @@ class MainThread(Thread):
         if self.date_country is None:
             check = True
             min_date = "9999-99-99"
+        if check:
+            for n in range(len(self.models)):
+                model = self.models[n]
+                mdate = model.get_day_with_id(self.tbm, 1)
+                if mdate < min_date:
+                    self.date_country = n
+                    min_date = mdate
+        date = self.models[self.date_country].get_day_with_id(self.tbm, day)
         for n in range(len(self.models)):
             model = self.models[n]
-            model.update(self.tbm, day + 1)
-            if check:
-                if model.date[-1] < min_date:
-                    self.date_country = n
-                    min_date = model.date[-1]
+            model.update(self.tbm, date)
             for x in range(self.nb_param):
                 key = self.keys[x]
                 val = model.param_dict[key]["value"]
@@ -465,11 +469,10 @@ class MainThread(Thread):
         self.init_model()
         self.update_world()
         self.change_countries(self.num_country)
-        x = 0
+        x = 1
         self.init_affichage()
         self.gen_data(x)
-        while x < self.nb_iterations[self.num_model] or self.date[-1] != self.models[self.num_country].date[-1]:
-            x += 1
+        while x < self.nb_iterations[self.date_country]:
             self.y.append(len(self.y))
             self.gen_data(x)
             self.graph_value()
@@ -480,4 +483,5 @@ class MainThread(Thread):
             if len(self.param_dict[self.num_model][self.keys[0]]) >= 2:
                 self.display_graph(1)
                 self.display_graph(2)
+            x += 1
         self.tbm.end()

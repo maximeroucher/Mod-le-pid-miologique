@@ -66,6 +66,30 @@ class TableManager:
             return None
 
 
+    def get_country_data_by_day(self, day, tag):
+        """ Retourne les données associées au pays donné au jour donné
+        ---
+        param :
+
+            - id (int) le jour
+            - tag (str) le pays
+
+        result :
+
+            - tuple / None
+        """
+        assert self.connected
+        try:
+            return self.cursor.execute(f'Select * from {tag} where Date = "{day}"').fetchone()[1:]
+        except Exception as e:
+            return self.get_country_data_by_id(1, tag)
+
+
+    def get_day_with_id(self, id, tag):
+        assert self.connected
+        return self.cursor.execute(f'Select Date from {tag} where id = {id}').fetchone()[0]
+
+
     def connect(self):
         """ Ouvre la fenêtre de sélection de la base de donnée et charge la base de donnée
         ---
