@@ -14,7 +14,7 @@ from MainThread import MainThread
 from tools import *
 
 # Le nombre d'images par seconde
-FPS = 120
+FPS = 60
 
 # Code du clic gauche de la souris
 LEFT = 1

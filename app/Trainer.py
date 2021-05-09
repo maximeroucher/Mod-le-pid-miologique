@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 from matplotlib import pyplot as plt
+from tqdm import tqdm
 
 from RecNN import RecNN
 
@@ -190,23 +191,25 @@ class Trainer:
         return res
 
 
-    def compare(self, n, ecart):
+    def compare(self, n, nb_model):
         """ Compare différents modèles
         ---
         param :
 
             - n (int) le nombre de modèle à comparer
+            - nb_model (int) le nombre de model à comparer
         """
+        nb_model = min(nb_model, self.NN.nb_train // 1000)
+        n = min(n, self.NN.nb_train // 1000)
+        ecart = n // nb_model
         real = T.extract_prediction_sequence(TYPE)
         x = list(range(len(real)))
         xx = x[START + NB_INPUT:]
         plt.plot(x, real, label="Réel")
-        for k in range(n // ecart):
+        bef, aft = self.NN.filename.split(str(self.NN.nb_train))
+        for k in tqdm(range(n // ecart)):
             i = [real[START:START + NB_INPUT]]
-            # struct(30-100-50-1)-lr(0.001)-tr(32000).msgpack
-            # f"./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr({2 * (k + 1)}000).json"
-            # struct(50-100-100-100-50-1)-lr(0.001)-tr(9400).msgpack
-            NN = RecNN.load_from_file(f"./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr({ecart * (k + 1)}000).msgpack")
+            NN = RecNN.load_from_file(bef + str(ecart * (k + 1) * 1000) + aft)
             y = T.predict(len(real) - NB_INPUT - START, i, NN)
             plt.plot(xx, y, label=f"Après {ecart * (k + 1)}000 itérations")
             plt.legend()
@@ -225,23 +228,24 @@ TYPE = "Infectés"
 # ./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(17600).json ~ 60 min
 # ./Model/struct(50-100-100-100-50-1)-lr(0.001)-tr(38800).msgpack peut le faire ~ 3/4 min
 # ./Model/struct(50-100-100-100-100-100-50-1)-lr(0.001)-tr(7000).msgpack
-NN = RecNN.load_from_file("./Model/struct(50-100-100-100-100-100-50-1)-lr(0.001)-tr(9500).msgpack")
+NN = RecNN.load_from_file("./Model/struct(50-500-500-500-500-500-500-500-50-1)-lr(0.001)-tr(17600).json")
 
 T = Trainer(NN)
 T.connect("./Simulation/Taux incidence 0/result.db")
 T.create_batch(NB_INPUT, TYPE)
 
-T.compare(38, 4)
+T.compare(40, 5)
 
+"""
 real = T.extract_prediction_sequence(TYPE)
 i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-""" for _ in range(300):
+for _ in range(300):
     T.train(100, 512)
     NN.save()
- """
+
 
 y = T.predict(len(real) - NB_INPUT - START, i)
 
@@ -249,7 +253,7 @@ plt.plot(x, real, label="Réel")
 plt.plot(xx, y, label="Après itérations")
 plt.legend()
 plt.show()
-
+"""
 
 # TODO:
 #   - test s/ nvl sim

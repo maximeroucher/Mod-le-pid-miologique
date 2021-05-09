@@ -101,6 +101,7 @@ class RecNN:
         self.bias = np.zeros(layer_dim[1])
         self.layer_dim = layer_dim
         self.use_json = False
+        self.filename = ""
         if len(layer_dim) > 2:
             self.child = RecNN(layer_dim[1:], n + 1, lr)
             self.child.parent = self
@@ -209,6 +210,7 @@ class RecNN:
 
             - filename (str) le nom du fichier
         """
+        self.filename = filename
         if filename.endswith(".json"):
             data = json.load(open(filename))
             self.json = True
