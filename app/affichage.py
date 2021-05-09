@@ -1,8 +1,7 @@
-import json
-import msgpack
 import os
 import random
-import time
+
+import msgpack
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
@@ -15,7 +14,7 @@ from MainThread import MainThread
 from tools import *
 
 # Le nombre d'images par seconde
-FPS = 60
+FPS = 120
 
 # Code du clic gauche de la souris
 LEFT = 1
@@ -130,4 +129,3 @@ while True:
 # TODO:
 #       - afficher reg à gch (+ delta)
 #       - estimation tps calcul
-#       - IA classique + LSTM

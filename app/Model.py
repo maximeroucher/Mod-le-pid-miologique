@@ -36,4 +36,15 @@ class Model:
 
 
     def get_day_with_id(self, tbm, id):
+        """ Récupère le jour associé à l'id donné pour ce pays
+        ---
+        param :
+
+            - tbm (TableManager) le gestionnaire de base de donnée
+            - id (int) l'id du jour
+
+        result :
+
+            - str
+        """
         return tbm.get_day_with_id(id, self.tag)

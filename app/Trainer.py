@@ -2,9 +2,7 @@ import datetime
 import random
 import sqlite3
 import time
-from tkinter import messagebox
 
-import easygui
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -31,25 +29,7 @@ class Trainer:
         self.all_batchs = []
 
 
-    def out_connect(self):
-        """ Ouvre la fenêtre de sélection de la base de donnée et charge la base de donnée
-        ---
-        result :
-
-                bool
-        """
-        f = easygui.fileopenbox("test", default=".", filetypes=["*.db"])
-        if f:
-            if not f.endswith(".db"):
-                messagebox.showerror("Erreur", "L'extension du fichier n'est pas correcte")
-                return False
-            else:
-                self.in_connect(f)
-                return True
-        return False
-
-
-    def in_connect(self, f):
+    def connect(self, f):
         """ Charge la base de donnée fournie
         ---
         result :
@@ -248,21 +228,20 @@ TYPE = "Infectés"
 NN = RecNN.load_from_file("./Model/struct(50-100-100-100-100-100-50-1)-lr(0.001)-tr(9500).msgpack")
 
 T = Trainer(NN)
-T.in_connect("./Simulation-0/result.db")
+T.connect("./Simulation/Taux incidence 0/result.db")
 T.create_batch(NB_INPUT, TYPE)
 
-#T.compare(38, 4)
-
+T.compare(38, 4)
 
 real = T.extract_prediction_sequence(TYPE)
 i = [real[START:START + NB_INPUT]]
 x = list(range(len(real)))
 xx = x[START + NB_INPUT:]
 
-for _ in range(300):
+""" for _ in range(300):
     T.train(100, 512)
     NN.save()
-
+ """
 
 y = T.predict(len(real) - NB_INPUT - START, i)
 

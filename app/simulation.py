@@ -1,12 +1,16 @@
+from __future__ import print_function
+
 import math
 import os
 import random
+import sqlite3
 import time
-from tqdm import tqdm
+import datetime
 from enum import Enum
 
+from tqdm import tqdm
+
 from tools import *
-import sqlite3
 
 # Mute l'import de pygame
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
@@ -28,9 +32,10 @@ class Comportement(Enum):
     NORMAL = 1
     QUARANTAINE = 2
     DEPLACEMENT = 3
+    CONFINEMENT = 4
 
     def __str__(self):
-        return "Comportement de la population : " + self._name_.capitalize()
+        return self._name_.capitalize()
 
 
 class Person:
@@ -62,8 +67,8 @@ class Person:
         self.comportement = Comportement.NORMAL
         self.VMAX = 5
         self.RAYON = rayon
-        self.f = 1e-4
-        self.k = 1e-4
+        self.f = 1
+        self.k = 1
 
 
     def __eq__(self, other):
@@ -87,7 +92,7 @@ class Person:
             self.vy *= r
 
 
-    def update(self, w, h, person):
+    def mise_a_jour(self, w, h, person):
         """ Calcul de l'étape suivante
         ---
         param :
@@ -114,39 +119,6 @@ class Person:
             self.etat = Etat.RETABLI
 
 
-    def position(self, other):
-        """ Indique la position de la personne par rapport à l'autre
-        ---
-        param :
-
-            - other (Person) la personne dont on veut comparer la position
-        """
-        pos = [1, 1]
-        if self.x < other.x:
-            pos[0] = -1
-        if self.y < other.y:
-            pos[1] = -1
-        return pos
-
-
-    def end_quarantine(self):
-        """ Augmente la vitesse pour la remettre à sa valeur d'origine
-        ---
-        """
-        self.VMAX = 5
-        self.vx = (self.vx / 2) * self.VMAX
-        self.vy = (self.vy / 2) * self.VMAX
-
-
-    def start_quarantine(self):
-        """ Dinimue la vitesse pour limiter les contacts
-        ---
-        """
-        self.vx = (self.vx / self.VMAX) * 2
-        self.vy = (self.vy / self.VMAX) * 2
-        self.VMAX = 2
-
-
     def repulsion(self, person):
         """ Calcule une force de répulsion entre les autres particules et celle-ci, dans le cas d'un confinement
         ---
@@ -161,21 +133,22 @@ class Person:
                 if dx < 5 * self.RAYON:
                     dy = abs(self.y - other.y)
                     if dy < 5 * self.RAYON:
-                        fx = self.k * (20 * self.RAYON - dx) - self.f * self.vx
-                        fy = self.k * (20 * self.RAYON - dy) - self.f * self.vy
-                        if self.x < other.x:
-                            fx = - fx
-                        if self.y < other.y:
-                            fy = - fy
-                        ax += fx
-                        ay += fy
+                        angle = math.atan2(self.y - other.y, self.x - other.x)
+                        d = math.hypot(dy, dx)
+                        v = math.hypot(self.vx, self.vy)
+                        f = self.k * (d - 2 * self.RAYON) - self.f * v
+                        ax += f * math.cos(angle)
+                        ay += f * math.sin(angle)
         self.ax = ax
         self.ay = ay
 
 
-    def get_color(self):
+    def couleur(self):
         """ Indique la couleur d'affichage en fonction de l'état
         ---
+        result :
+
+            - pygame.Color
         """
         if self.etat == Etat.SAIN:
             return colors[0]
@@ -197,7 +170,7 @@ class Person:
         return False
 
 
-    def show(self, screen, t):
+    def afficher(self, screen, t):
         """ Affiche la personne
         ---
         param :
@@ -205,10 +178,10 @@ class Person:
             - screen (pygame.Surface) l'écran
             - t (int) la distance au bord supérieur de la fenêtre
         """
-        pygame.draw.circle(screen, self.get_color(), (self.x, self.y + t), self.RAYON)
+        pygame.draw.circle(screen, self.couleur(), (self.x, self.y + t), self.RAYON)
 
 
-    def copy(self):
+    def copier(self):
         """ Retourne une copie de la persoone
         ---
         """
@@ -217,7 +190,7 @@ class Person:
 
 class Simulation:
 
-    def __init__(self, person, w, h, screen, top, taux_incidence):
+    def __init__(self, person, w, h, screen, top, taux_incidence, threshold, comportement_urgence=Comportement.QUARANTAINE):
         """ Initialisation de la simulation
         ---
         param :
@@ -228,8 +201,10 @@ class Simulation:
             - screen (Pygame.Surface) la surface sur laquelle afficher la simulation
             - top (int) la distance au haut de la fenêtre
             - taux_incidence (int) le nombre de personnes infectés simultanément avant de mettre en place une quarantaine
+            - threshold (float 0 <= threshold <= 1) le pourcentage de taux_incidence à atteindre afin de mettre fin à la quarantaine
+            - comportement_urgence (Comportement) le comportement de la simulation si le nombre d'inféctés est supérieur à taux_incidence
         """
-        self.person = [Person.copy(p) for p in person]
+        self.person = [Person.copier(p) for p in person]
         self.person[0].etat = Etat.INFECTE
         self.sains = self.person[0:-1]
         self.infectes = [self.person[0]]
@@ -240,12 +215,13 @@ class Simulation:
         self.data = {"Sains": [], "Infectés": [], "Rétablis": []}
         self.data_font = pygame.font.SysFont("montserrat", 18)
         self.font = pygame.font.SysFont("montserrat", 24)
-        self.split()
-        self.update_data()
+        self.reassignation()
+        self.mise_a_jour_donnees()
         self.screen = screen
         self.comportement = Comportement.NORMAL
         self.TAUX_INCIDENCE = taux_incidence
         self.quarantine_time = []
+        self.threshold = threshold
 
         # Largeur de la fenêtre
         self.WIDTH = 700
@@ -267,9 +243,10 @@ class Simulation:
         self.LEFT = 1100
         self.no_action = taux_incidence == 0
         self.ended = False
+        self.comportement_urgence = comportement_urgence
 
 
-    def init_affichage(self):
+    def initialisation_affichage(self):
         """ Initialisation de l'affichage de la simulation
         ---
         """
@@ -301,7 +278,7 @@ class Simulation:
                 ((self.MARGIN - w) + self.LEFT - 10, Y - 10 + self.TOP))
 
 
-    def display_country(self):
+    def mise_a_jour_graphique(self):
         """ Affiche le graphique du pays donné
         ---
         """
@@ -318,9 +295,12 @@ class Simulation:
                     self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
 
         c_y = [x * dy + self.MARGIN + self.LEFT for x in self.quarantine_time]
-        pts = [[[c_y[x], self.HAUT + 3 * self.MARGIN - self.TOP + 10], [c_y[x], self.TOP + self.MARGIN]] for x in range(len(c_y))]
-        for x in range(len(pts)):
-            pygame.draw.line(self.screen, FG, pts[x][0], pts[x][1], 2)
+
+        for x in range((len(c_y) + 1) // 2):
+            if 2 * x + 1 < len(c_y):
+                create_mask(self.TOP + self.MARGIN, c_y[2 * x], c_y[2 * x + 1] - c_y[2 * x], self.HEIGHT - 2 * self.MARGIN, QC, self.screen)
+            else:
+                create_mask(self.TOP + self.MARGIN, c_y[2 * x], self.LEFT + self.WIDTH - self.MARGIN - c_y[2 * x], self.HEIGHT - 2 * self.MARGIN, QC, self.screen)
 
         for key in self.data:
             c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.data[key]]
@@ -342,7 +322,7 @@ class Simulation:
                          (self.WIDTH - self.MARGIN + 10 + self.LEFT, self.HAUT + self.TOP), 2)
 
 
-    def update_data(self):
+    def mise_a_jour_donnees(self):
         """ Met à jour les données de la simulation
         ---
         """
@@ -351,7 +331,7 @@ class Simulation:
         self.data["Rétablis"].append(len(self.retablis))
 
 
-    def split(self):
+    def reassignation(self):
         """ Assigne les personnes dans leurs compartiments respectifs en fonction de leur état
         ---
         """
@@ -371,11 +351,11 @@ class Simulation:
                 p += 1
 
 
-    def show(self):
+    def afficher(self):
         """ Affiche la simulation
         ---
         """
-        create_mask(self.TOP - 50, -20, self.w + 30, self.h + 20, BG, self.screen)
+        create_mask(self.TOP - 50, -20, self.w + 100, self.h + 20, BG, self.screen)
         pygame.draw.line(self.screen, pygame.Color(200, 200, 200), (0, self.TOP - 50), (self.w, self.TOP - 50))
         pygame.draw.line(
             self.screen, pygame.Color(200, 200, 200),
@@ -386,18 +366,18 @@ class Simulation:
             (self.w, self.h + self.TOP - 50),
             (0, self.h + self.TOP - 50))
         pygame.draw.line(self.screen, pygame.Color(200, 200, 200), (0, self.h + self.TOP - 50), (0, self.TOP - 50))
-        [p.show(self.screen, self.TOP - 50) for p in self.person]
+        [p.afficher(self.screen, self.TOP - 50) for p in self.person]
         # dernière action du tour
         self.y.append(len(self.y))
 
 
-    def update_text(self):
+    def mise_a_jour_texte(self):
         """ Change les chiffres de la simulation
         ---
         """
         if not self.no_action:
             create_mask(self.TOP - 30, 1200, 500, 100, BG, self.screen)
-            center_text(self.screen, self.data_font, str(self.comportement), FG, 500, 20, self.TOP - 30, 1200)
+            center_text(self.screen, self.data_font, "Comportement de la population : " + str(self.comportement), FG, 500, 20, self.TOP - 30, 1200)
             center_text(self.screen, self.data_font,
                         f"Taux d'incidence : {self.TAUX_INCIDENCE}", FG, 500, 20, self.TOP, 1200)
         for x, key in enumerate(self.data):
@@ -407,46 +387,53 @@ class Simulation:
                 FG, 100, 20, self.TOP + 455, 1150 + 250 * x)
 
 
-    def update(self):
+    def mise_a_jour(self):
         """ Met à jour la simulation
         ---
         """
         for p in self.person:
-            p.update(self.w, self.h, self.person)
+            p.mise_a_jour(self.w, self.h, self.person)
         for p in self.infectes:
             if random.randint(0, 100) <= p.p * 100:
                 for n in self.sains:
                     if p.collision(n):
                         n.etat = Etat.INFECTE
         if len(self.infectes) > 0:
-            self.split()
-            self.update_comportement()
-            self.update_data()
-            self.update_text()
-            self.display_country()
+            self.reassignation()
+            self.mise_a_jour_comportement()
+            self.mise_a_jour_donnees()
+            self.mise_a_jour_texte()
+            self.mise_a_jour_graphique()
         else:
             if not self.ended:
                 self.ended = True
         pygame.display.update()
 
 
-    def update_comportement(self):
+    def mise_a_jour_comportement(self):
         """ Met à jour le comportement de la simulation
         ---
         """
         if not self.no_action:
             if len(self.infectes) > self.TAUX_INCIDENCE and self.comportement == Comportement.NORMAL:
-                self.comportement = Comportement.QUARANTAINE
                 self.quarantine_time.append(self.y[-1])
-                for p in self.person:
-                    p.comportement = Comportement.QUARANTAINE
-                    #p.start_quarantine()
-            elif len(self.infectes) < self.TAUX_INCIDENCE * .9 and self.comportement == Comportement.QUARANTAINE:
+                if self.comportement_urgence == Comportement.QUARANTAINE:
+                    self.comportement = Comportement.QUARANTAINE
+                    for p in self.person:
+                        p.comportement = Comportement.QUARANTAINE
+                else:
+                    self.comportement = Comportement.CONFINEMENT
+                    for p in self.infectes:
+                        p.comportement = Comportement.QUARANTAINE
+            elif len(self.infectes) < self.TAUX_INCIDENCE * self.threshold and self.comportement == Comportement.QUARANTAINE:
                 self.comportement = Comportement.NORMAL
-                for p in self.person:
-                    p.comportement = Comportement.NORMAL
-                    #p.end_quarantine()
-                    self.quarantine_time.append(self.y[-1])
+                self.quarantine_time.append(self.y[-1])
+                if self.comportement_urgence == Comportement.QUARANTAINE:
+                    for p in self.person:
+                        p.comportement = Comportement.NORMAL
+                else:
+                    for p in self.infectes:
+                        p.comportement = Comportement.NORMAL
 
 
 pygame.init()
@@ -458,10 +445,13 @@ w = info.current_w // 2 - 10
 h = info.current_h - 10
 
 
-S = 50
-NB_PERSON = 600
+TOP = 50
 SAVE = False
 NB_SIM = 1
+
+S = 100
+NB_PERSON = 1200
+THRESHOLD = 0.3
 
 
 for _ in range(NB_SIM):
@@ -476,13 +466,13 @@ for _ in range(NB_SIM):
                 vx, vy, 0, 0, .5, 6))
 
 
-    Sim = Simulation(person, w, h, screen, 50, S)
-    Sim.init_affichage()
+    Sim = Simulation(person, w, h, screen, TOP, S, THRESHOLD, Comportement.QUARANTAINE)
+    Sim.initialisation_affichage()
     x = 0
 
 
     if SAVE:
-        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S}"
+        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}"
         if not os.path.exists(titre):
             os.makedirs(titre)
         os.chdir(titre)
@@ -500,12 +490,11 @@ for _ in range(NB_SIM):
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 quit()
         time.sleep(.01)
-        Sim.update()
-        Sim.show()
+        Sim.mise_a_jour()
+        Sim.afficher()
         if SAVE:
             if not Sim.ended:
-                pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation-{S}\\img{x}.jpg")
-                pass
+                pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}\\img{x}.jpg")
             elif not DATA_SAVED:
                 for k in range(x):
                     cursor.execute(f"""INSERT INTO Sim{l} VALUES (NULL, {",".join([str(Sim.data[key][k] / NB_PERSON) for key in Sim.data])})""")
@@ -514,12 +503,16 @@ for _ in range(NB_SIM):
                 DATA_SAVED = True
             x += 1
 
+    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}"
+    if not os.path.exists(titre):
+        os.makedirs(titre)
+    pygame.image.save(Sim.screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}\\Résultat - Personnes {NB_PERSON}, Comportement {str(Sim.comportement_urgence)}, Threshold {THRESHOLD}.jpg")
+
 
 # TODO:
 #       - pt attractif
 #       - afficher reg°
 #       - opti° reg°
-#       - Numba
 
 # pb test
 # https://jamanetwork.com/journals/jama/fullarticle/2762130

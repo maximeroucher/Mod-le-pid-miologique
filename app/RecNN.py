@@ -1,10 +1,9 @@
 import json
-import msgpack
 import os
 
-from numba import njit
-
+import msgpack
 import numpy as np
+from numba import njit
 
 
 def relu(x):

@@ -48,11 +48,11 @@ class TableManager:
 
 
     def get_country_data_by_id(self, id, tag):
-        """ Retourne les données associées au pays donné au jour donné
+        """ Retourne les données associées au pays donné au jour odnt l'id est donné
         ---
         param :
 
-            - id (int) le jour
+            - id (int) l'id du jour
             - tag (str) le pays
 
         result :
@@ -71,7 +71,7 @@ class TableManager:
         ---
         param :
 
-            - id (int) le jour
+            - day (str) le jour
             - tag (str) le pays
 
         result :
@@ -86,6 +86,17 @@ class TableManager:
 
 
     def get_day_with_id(self, id, tag):
+        """ Retourne le jour associé à l'id donnée dans la table donnée
+        ---
+        param :
+
+            - id (int) l'id du jour
+            - tag (str) le pays
+
+        result :
+
+            - str
+        """
         assert self.connected
         return self.cursor.execute(f'Select Date from {tag} where id = {id}').fetchone()[0]
 

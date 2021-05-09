@@ -1,15 +1,14 @@
 from __future__ import print_function
+
+import datetime
 import math
+import time
 
 import matplotlib.pyplot as plt
-# Barre de progression
-from tqdm import tqdm
-import time
 import numpy as np
 from matplotlib import cm
-from matplotlib.ticker import LinearLocator
-from mpl_toolkits.mplot3d import Axes3D
-import datetime
+# Barre de progression
+from tqdm import tqdm
 
 
 def calcul_logistique(param, x):
@@ -259,7 +258,7 @@ s = data["Sains"]
 i = data["Infectés"]
 r = data["Rétablis"]
 
-print(remonte_gradient(.01, 100, i, s, 1e-4))
+print(remonte_gradient(10, 100, i, s, 1e-4))
 
 """
 calcul_surf = lambda x, y : a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y

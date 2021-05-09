@@ -11,9 +11,12 @@ from shapely.geometry import Point, Polygon
 
 from Pays import Pays
 
+# Couleur du texte
 FG = (182, 185, 190)
 # Couleur de fond
 BG = (32, 34, 37)
+# Couleur de la quarataine
+QC = (44, 56, 126)
 
 # Vérification position point
 
@@ -261,53 +264,8 @@ def get_scale_value(m, M, nb_pt):
 
 
 
-
-
-# Runge Kutta 4
-
-def RK4(h, T, y0, f):
-    # f verifie : y' = f(y, t)
-    t = 0
-    y = y0
-    res_t = [0]
-    res_y = [y0]
-    while t < T:
-        k1 = f(t, y)
-        k2 = f(t + 1 / 2 * h, y + 1 / 2 * h * k1)
-        k3 = f(t + 1 / 2 * h, y + 1 / 2 * h * k2)
-        k4 = f(t + h, y + h * k3)
-        y = y + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-        t = t + h
-        res_t.append(t)
-        res_y.append(y)
-    return res_t, res_y
-
-
-
 import numpy as np
-from matplotlib import cm
 from matplotlib import pyplot as plt
-from matplotlib.colors import LightSource
-from matplotlib.ticker import FormatStrFormatter, LinearLocator
-from mpl_toolkits.mplot3d import Axes3D
-
-
-def plot_ia(data): # Test
-    x = range(len(data[0]))
-    y = range(len(data))
-
-    X, Y = np.meshgrid(x, y)  # `plot_surface` expects `x` and `y` data to be 2D
-
-    Z = np.array(data)
-
-    fig = plt.figure()
-
-    ax = fig.add_subplot(1, 2, 1, projection='3d')
-    ax.plot_surface(X * 30, Y * 30, Z, rstride=1, cstride=1, cmap=cm.inferno)
-
-    ax = fig.add_subplot(1, 2, 2, projection='3d')
-    ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.viridis)
-    plt.show()
 
 
 def afficher_champ_vecteur(xran, yran, grid):
