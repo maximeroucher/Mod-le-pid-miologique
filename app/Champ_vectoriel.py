@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 def afficher_champ_vecteur(xran, yran, grid, b, l):
     """ Affiche le champ vectoriel associé à l'équation différentielle du modèle SIR
     ---
-    param :
+    paramètres :
 
         - xran (list(int)) la liste contenant la valeur minimale et maximale de x
         - xran (list(int)) la liste contenant la valeur minimale et maximale de y
@@ -38,12 +38,11 @@ def afficher_champ_vecteur(xran, yran, grid, b, l):
     plt.ylim(yran)
     # Affiche la grille
     plt.grid('on')
+    plt.show()
 
 
 ## Example
-if __name__ == "__main__":
-    afficher_champ_vecteur([-.5, 1], [-.5, 1], [40, 40], 0.5, 0.1)
-    plt.show()
+afficher_champ_vecteur([-.5, 1], [-.5, 1], [40, 40], 0.5, 0.1)
 
 # Le lien d'ou je tire ça :
 # https://gist.github.com/nicoguaro/6767643

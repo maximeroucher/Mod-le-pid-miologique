@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import datetime
 import math
 import time
@@ -9,140 +7,6 @@ import numpy as np
 from matplotlib import cm
 # Barre de progression
 from tqdm import tqdm
-
-
-def calcul_logistique(param, x):
-    """ Calcul de la courbe de la fonction logistique
-    ---
-    param :
-
-        - param (list(float))
-        - x (float)
-
-    result :
-
-        - float
-    """
-    assert len(param) == 3
-    K, R, A = param
-    return K / (1 + A * math.exp(R * x))
-
-
-def der_log(param, x):
-    """ Calcul de la courbe de la dérivée de la fonction logistique
-    ---
-    param :
-
-        - param (list(float))
-        - x (float)
-
-    result :
-
-        - float
-    """
-    assert len(param) == 3
-    K, R, A = param
-    H = A * math.exp(R * x)
-    return - (K * R * H) / (1 + H)**2
-
-
-class Regression:
-
-    def __init__(self, pts, min_pts, f):
-        """ Régression linéaire de la simulation
-        ---
-        param :
-
-            - pts (list(str, int)) la liste des points
-            - min_pts (int) le nombre minimal de points pour le calcul de la régression
-            - f (func(float -> float)) la fonction à utiliser pour la régression
-        """
-        self.pts = pts
-        self.nb_pts = min(min_pts, len(pts))
-        self.f = f
-
-
-    def sq_error(self, pts, param):
-        """ Calcul le carré de l'erreur
-        ---
-        result :
-
-            - pts (list(float)) la liste en entrée
-            - param (list(float))
-
-        result :
-
-            - float
-        """
-        r = 0
-        d = int(len(self.pts) / self.nb_pts)
-        for x in range(self.nb_pts):
-            r += (self.pts[x * d][1] - self.f(param, self.pts[x * d][0]))**2
-        return r
-
-
-    def regression(self, range_param, nb_iteration):
-        """ Calcul la régression de le courbe donnée
-        ---
-        param :
-
-            - param (list(float))
-            - nb_iteration (int) le nombre d'itération de calcul
-
-        result :
-
-            - list(float)
-        """
-        print("Début de la régression")
-        t = time.perf_counter()
-        lparam = len(range_param)
-        params = [0 for _ in range(lparam)]
-        minS = -1
-        RANGE = 10
-        diff = 0
-        for k in range(nb_iteration):
-            R = RANGE
-            dparam = [(range_param[k][1] - range_param[k][0]) / R for k in range(lparam)]
-            iterations = [0 for _ in range(lparam)]
-            for _ in tqdm(range((R + 1)**lparam), leave=False):
-                p = [range_param[i][0] + iterations[i] * dparam[i] for i in range(lparam)]
-                err = self.sq_error(pts, p)
-                if minS == -1 or minS > err:
-                    minS = err
-                    params = p
-                for i in range(lparam):
-                    iterations[i] = iterations[i] + 1
-                    if iterations[i] > R:
-                        iterations[i] = 0
-                    else:
-                        break
-            for i in range(lparam):
-                range_param[i][0] = params[i] - dparam[i]
-                range_param[i][1] = params[i] + dparam[i]
-            print(f"Itération n° {k + 1}  \t Erreur : {minS} \t Différence : {abs(diff - minS)}")
-            diff = minS
-        print(
-            f"Fin de la régression, durée : {datetime.datetime.strftime(datetime.datetime.utcfromtimestamp(time.perf_counter() - t), '%H:%M:%S:%f')}")
-        return params
-
-
-    def calcul_r2(self, y, x, f):
-        """ Calcul de l'erreur de la regression
-        ---
-        param :
-
-            - y (list(float)) les données en sortie
-            - x (list(float)) les données en entrée
-            - f (func(float -> float)) la fonction de regression
-
-        result :
-
-            - float entre 0 et 1
-        """
-        Y = sum(y) / len(y)
-        Stot = sum([(y[k] - Y)**2 for k in range(len(y))])
-        Sres = sum([(y[k] - f(x[k]))**2 for k in range(len(y))])
-        return 1 - Sres / Stot
 
 
 # Données tirées de la simulation
@@ -184,72 +48,81 @@ data = {'Sains':
     1949, 1950]}
 
 
-def calc_I(r, l):
-    """ Déduit la courbe de I en fonction de celle de R avec l'équation R' = l * I, l constante
+def calcul_cst_grad(infectes, sains, l, mu):
+    """ On calcule les constantes du gradient
     ---
-    param :
+    paramètres :
 
-        - r (list(float)) les points de la courbe de R
-        - l (float) la constante
+        - infectes (list(int)) la liste des nombres d'infectés
+        - sains (list(int)) la liste des nombres de sains
+        - l (float) la valeur de lambda
+        - mu (float) la valeur de mu
 
-    result :
+    résultats :
 
-        - list(float)
+        - 5 float
     """
-    res = [0]
-    for k in range(len(r) - 1):
-        res.append(1 / l * (r[k + 1] - r[k]))
-    return res
-
-
-def calc_S(r, i, pop):
-    """ Déduit la courbe de S en fonction de R et I car R + I + P est constant par hypothèse
-    ---
-    param :
-
-        - r (list(float)) les points de la courbe de R
-        - i (list(float)) les points de la courbe de I
-        - pop (int) la population totale de la simulation
-
-    result :
-
-        - list(float)
-    """
-    return [pop - r[k] - i[k] for k in range(len(r))]
-
-
-def calcul_cst_grad(i, b, l, mu):
     a, c, d, e = 0, 0, 0, 0
-    for k in range(len(s)):
-        if mu + l * math.log(s[k]) - s[k] >= 0:
-            lk = math.log(s[k])
+    for k in range(len(sains)):
+        # Si la valeurs est utilisable
+        if mu + l * math.log(sains[k]) - sains[k] >= 0:
+            lk = math.log(sains[k])
             a += lk ** 2
             c += lk
-            d -= (i[k] + s[k]) * lk
-            e += s[k] - i[k]
-    return a, len(s), 2 * c, 2 * d, 2 * e
+            d -= (infectes[k] + sains[k]) * lk
+            e += sains[k] - infectes[k]
+    return a, len(sains), 2 * c, 2 * d, 2 * e
 
 
-def calc_grad(l, mu, i, s):
-    a, b, c, d, e = calcul_cst_grad(i, s, l, mu)
+def calc_grad(l, mu, infectes, sains):
+    """ Calcule le gradient
+    ---
+    paramètres :
+
+        - l (float) la valeur de lambda
+        - mu (float) la valeur de mu
+        - infectes (list(int)) la liste des nombres d'infectés
+        - sains (list(int)) la liste des nombres de sains
+
+    résultats :
+
+        - tuple(float)
+    """
+    a, b, c, d, e = calcul_cst_grad(infectes, sains, l, mu)
     return (2 * a * l + c * mu + d, c * l + 2 * b * mu + e)
 
 
-def remonte_gradient(l1, mu1, i, s, step):
-    last = [l1, mu1]
-    new = [l1, mu1]
+def remontee_gradient(l1, mu1, infectes, sains, etape):
+    """ L'algorithme de remontée de gradient
+    ---
+    paramètres :
+
+        - l1 (float) la valeur de lambda
+        - mu1 (float) la valeur de mu
+        - infectes (list(int)) la liste des nombres d'infectés
+        - sains (list(int)) la liste des nombres de sains
+        - etape (float) la constante d'apprentissage
+
+    résultats :
+
+        - tuple(float) les valeurs de lambda et mu
+    """
+    ancien = [l1, mu1]
+    nouveau = [l1, mu1]
     x = 0
-    while last[0] - new[0] + last[1] - new[1] > 0 or x == 0:
-        grad = calc_grad(new[0], new[1], i, s)
-        last = [new[0], new[1]]
-        new[0] = new[0] - step * grad[0]
-        new[1] = new[1] - step * grad[1]
+    # Tant que l'on n'atteint pas un point fixe
+    while ancien[0] - nouveau[0] + ancien[1] - nouveau[1] > 0 or x == 0:
+        grad = calc_grad(nouveau[0], nouveau[1], infectes, sains)
+        # On met à jour le gradient en conservant la dernière valeur
+        ancien = [nouveau[0], nouveau[1]]
+        nouveau[0] = nouveau[0] - etape * grad[0]
+        nouveau[1] = nouveau[1] - etape * grad[1]
         x += 1
-    return last
+    return ancien
 
 
 # Nombre de points pris en compte pour la régression (le but est de pouvoir minimiser ce paramètre)
-RANGE = 5
+RANGE = 50
 # Nombre de point de la régression
 NB_PTS = 100
 
@@ -258,55 +131,7 @@ s = data["Sains"]
 i = data["Infectés"]
 r = data["Rétablis"]
 
-print(remonte_gradient(10, 100, i, s, 1e-4))
-
-"""
-calcul_surf = lambda x, y : a * x ** 2 + b * y ** 2 + c * x * y + d * x + e * y
-
-X = np.arange(0, 2500, 100)
-Y = np.arange(0, 1000, 100)
-X, Y = np.meshgrid(X, Y)
-Z = calcul_surf(X, Y)
+print(remontee_gradient(10, 100, i, s, 1e-4))
 
 
-fig = plt.figure()
-ax = fig.gca(projection='3d')
-surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.rainbow,
-                       linewidth=0, antialiased=False)
-
-plt.show()
-"""
-
-""" 
-x = list(range(len(r)))
-
-# Exttrait les données à fournir pour la régression
-px = x[0:RANGE]
-py = r[0:RANGE] # on fait une régression sur la courbe R
-
-# Transforme les deux listes en une seule [[x0, y0], [x1, y1], ...]
-pts = list(zip(px, py))
-
-Reg = Regression(pts, NB_PTS, calcul_logistique)
-# Calcule la régression
-nK, nR, nA = Reg.regression([[0, 2000], [-.1, 0], [0, 100]], 15)
-err = Reg.calcul_r2(r, x, lambda x: calcul_logistique([nK, nR, nA], x))
-# Calcul les points de la courbe (donc plus que sur le domaine de régression)
-rr = [calcul_logistique([nK, nR, nA], z) for z in x]
-# En déduit I
-ii = calc_I(rr, 2.5e-2)
-# En déduit S
-ss = calc_S(rr, ii, 2000)
-
-print(f"Régression :\n- K = {nK}\n- R = {nR}\n- A = {nA}\n- r² = {err}")
-
-# Affiche le tout
-plt.plot(x, r)
-# plt.plot(s)
-# plt.plot(i)
-plt.plot(px, py)
-plt.plot(x, rr)
-#plt.plot(x, ii)
-#plt.plot(x, ss)
-plt.show()
- """
+# TODO: Tracer eq diff

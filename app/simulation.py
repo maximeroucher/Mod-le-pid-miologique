@@ -1,20 +1,20 @@
 from __future__ import print_function
 
+import datetime
 import math
 import os
 import random
 import sqlite3
 import time
-import datetime
 from enum import Enum
 
 from tqdm import tqdm
 
-from tools import *
+from outils import BG, FG, QC, centrer_texte, creer_masque, echelloner_valeur
 
-# Mute l'import de pygame
+# Empêche l'import de pygame d'afficher du texte
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'True'
-# Postionne la fenêtre de l'application
+# Postionne la fenêtre de l'application en haut à droite
 os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
 
 import pygame
@@ -32,18 +32,17 @@ class Comportement(Enum):
     NORMAL = 1
     QUARANTAINE = 2
     DEPLACEMENT = 3
-    CONFINEMENT = 4
 
     def __str__(self):
         return self._name_.capitalize()
 
 
-class Person:
+class Personne:
 
     def __init__(self, id, x, y, vx, vy, ax, ay, p, rayon):
         """ Initialisation de la personne
         ---
-        param :
+        paramètres :
 
             - id (int) l'identifiant de la personne
             - x (int) la position en absisce
@@ -54,6 +53,7 @@ class Person:
             - ay (float) l'accélération en ordonnée
             - p (float 0 <= p <= 1) la probabilité de contaminer une personne
         """
+        # L'identifiant de la personne
         self.id = id
         self.x = x
         self.y = y
@@ -62,23 +62,33 @@ class Person:
         self.ax = ax
         self.ay = ay
         self.p = p
+        # En cas d'infection, la personne restera infecté pendant self.TPS_INFECTE itérations
         self.TPS_INFECTE = random.randint(40, 60)
+        # État d'origine de la personne
         self.etat = Etat.SAIN
         self.comportement = Comportement.NORMAL
+        # La vitesse maximale de déplacement de la personne
         self.VMAX = 5
+        # La taille de la personne
         self.RAYON = rayon
+        # Coefficient de frottement fluide
         self.f = 1
+        # Coefficient de rappel de ressort
         self.k = 1
 
 
-    def __eq__(self, other):
+    def __eq__(self, autre):
         """ Égalité entre deux personnes
         ---
-        param :
+        paramètre :
 
-            - other (Person) la personne dont on veut vérifier si c'est l'autre
+            - autre (Personne) la personne dont on veut vérifier si c'est l'autre
+
+        résultat :
+
+            - bool (si la personne est l'autre)
         """
-        return self.id == other.id
+        return self.id == autre.id
 
 
     def correction_vitesse(self):
@@ -92,61 +102,78 @@ class Person:
             self.vy *= r
 
 
-    def mise_a_jour(self, w, h, person):
+    def mise_a_jour(self, largeur_sim, hauteur_sim, personnes):
         """ Calcul de l'étape suivante
         ---
-        param :
+        paramètres :
 
-            - w (int) la largeur de l'espace de simulation
-            - h (int) la hauteur de l'espace de simulation
-            - person (list(Person)) la liste des personnes de la simulation
+            - largeur_sim (int) la largeur de l'espace de simulation
+            - hauteur_sim (int) la hauteur de l'espace de simulation
+            - personnes (list(Personne)) la liste des personnes de la simulation
         """
+        # On remet l'accelération à zéro
         self.ax = self.ay = 0
+        # Pendant une quarantaine, on introduit une force de répulsion pour éviter les contacts, et une force de frottement fluide pour stabiliser le mouvement
         if self.comportement == Comportement.QUARANTAINE:
-            self.repulsion(person)
+            self.repulsion(personnes)
+        # On applique le schéma d'Euler pour la vitesse
         self.vx += self.ax
         self.vy += self.ay
+        # On renormalise la vitesse
         self.correction_vitesse()
-        if self.x > w or self.x < 0:
+        # Si on touche un bord, on part dans l'autre sens
+        if self.x > largeur_sim or self.x < 0:
             self.vx = - self.vx
-        if self.y > h or self.y < 0:
+        if self.y > hauteur_sim  or self.y < 0:
             self.vy = - self.vy
+        # On applique le schéma d'Euler pour la position
         self.x += int(self.vx)
         self.y += int(self.vy)
+        # Si la personne est infectée
         if self.etat == Etat.INFECTE:
+            # Un jour en étant infecté s'est écoulé
             self.TPS_INFECTE -= 1
+        # Si la personne n'est plus infecté
         if self.TPS_INFECTE == 0:
             self.etat = Etat.RETABLI
 
 
-    def repulsion(self, person):
+    def repulsion(self, personnes):
         """ Calcule une force de répulsion entre les autres particules et celle-ci, dans le cas d'un confinement
         ---
-        param :
+        paramètre :
 
-            - person (list(Person)) la liste des personnes de la simulation
+            - personnes (list(Personne)) la liste des personnes de la simulation
         """
         ax = ay = 0
-        for other in person:
-            if other is not self:
-                dx = abs(self.x - other.x)
+        for autre in personnes:
+            # On vérifie que l'on intergait pas avec la personne elle-même
+            if autre is not self:
+                # On vérifie que l'on est suffisament proche de la personne
+                dx = abs(self.x - autre.x)
                 if dx < 5 * self.RAYON:
-                    dy = abs(self.y - other.y)
+                    dy = abs(self.y - autre.y)
                     if dy < 5 * self.RAYON:
-                        angle = math.atan2(self.y - other.y, self.x - other.x)
+                        # On calcule l'angle et la distance entre self et autre
+                        angle = math.atan2(self.y - autre.y, self.x - autre.x)
                         d = math.hypot(dy, dx)
+                        # La vitesse de la personne
                         v = math.hypot(self.vx, self.vy)
-                        f = self.k * (d - 2 * self.RAYON) - self.f * v
+                        # La force causée par autre sur la personne
+                        f = self.k * (d - 2 * self.RAYON)
+                        # On calcule les composante selon les axes
                         ax += f * math.cos(angle)
                         ay += f * math.sin(angle)
-        self.ax = ax
-        self.ay = ay
+
+        # On assigne les nouvelles valeurs d'accelération
+        self.ax = ax - self.f * self.vx
+        self.ay = ay - self.f * self.vy
 
 
     def couleur(self):
         """ Indique la couleur d'affichage en fonction de l'état
         ---
-        result :
+        résultat :
 
             - pygame.Color
         """
@@ -157,178 +184,215 @@ class Person:
         return colors[2]
 
 
-    def collision(self, other):
+    def collision(self, autre):
         """ Vérifie s'il y a collision
         ---
+        paramètre :
+
+            - autre (Personne) la personne dont on veut vérifiée si elle est en collision avec self
+
+        résultat :
+
+            - bool (s'il y a collision entre les deux particules)
         """
-        dx = self.x - other.x
+        # On regarde si les particules sont suffisament proches
+        dx = self.x - autre.x
         if dx < 1.5 * 2 * self.RAYON:
-            dy = self.y - other.y
+            dy = self.y - autre.y
             if dy < 1.5 * 2 * self.RAYON:
-                return dx ** 2 + dy ** 2 <= 3 * 4 * self.RAYON ** 2
+                # On regarde si la distance est inférieur à celle entre 2 diamètres
+                return dx ** 2 + dy ** 2 <= 4 * 4 * self.RAYON ** 2
             return False
         return False
 
 
-    def afficher(self, screen, t):
+    def afficher(self, ecran, haut):
         """ Affiche la personne
         ---
-        param :
+        paramètres :
 
-            - screen (pygame.Surface) l'écran
-            - t (int) la distance au bord supérieur de la fenêtre
+            - ecran (pygame.Surface) l'écran
+            - haut (int) la distance au bord supérieur de la fenêtre
         """
-        pygame.draw.circle(screen, self.couleur(), (self.x, self.y + t), self.RAYON)
-
-
-    def copier(self):
-        """ Retourne une copie de la persoone
-        ---
-        """
-        return Person(self.id, self.x, self.y, self.vx, self.vy, self.ax, self.ay, self.p, self.RAYON)
+        pygame.draw.circle(ecran, self.couleur(), (self.x, self.y + haut), self.RAYON)
 
 
 class Simulation:
 
-    def __init__(self, person, w, h, screen, top, taux_incidence, threshold, comportement_urgence=Comportement.QUARANTAINE):
+    def __init__(self, personnes, largeur_sim, hauteur_sim, ecran, taux_incidence, seuil):
         """ Initialisation de la simulation
         ---
-        param :
+        paramètres :
 
-            - person (list(Person)) la liste de personne de la simulation
-            - w (int) la largeur de l'espace de la simulation
-            - h (int) la hauteur de l'espace de la simulation
-            - screen (Pygame.Surface) la surface sur laquelle afficher la simulation
-            - top (int) la distance au haut de la fenêtre
+            - personnes (list(Personne)) la liste de personne de la simulation
+            - largeur_sim (int) la largeur de l'espace de la simulation
+            - hauteur_sim (int) la hauteur de l'espace de la simulation
+            - ecran (Pygame.Surface) la surface sur laquelle afficher la simulation
             - taux_incidence (int) le nombre de personnes infectés simultanément avant de mettre en place une quarantaine
-            - threshold (float 0 <= threshold <= 1) le pourcentage de taux_incidence à atteindre afin de mettre fin à la quarantaine
+            - seuil (float 0 <= seuil <= 1) le pourcentage de taux_incidence à atteindre afin de mettre fin à la quarantaine
             - comportement_urgence (Comportement) le comportement de la simulation si le nombre d'inféctés est supérieur à taux_incidence
         """
-        self.person = [Person.copier(p) for p in person]
-        self.person[0].etat = Etat.INFECTE
-        self.sains = self.person[0:-1]
-        self.infectes = [self.person[0]]
+        self.personnes = personnes
+        # On infecte une personne
+        self.personnes[0].etat = Etat.INFECTE
+        # On assigne les personnes
+        self.sains = self.personnes[0:-1]
+        self.infectes = [self.personnes[0]]
         self.retablis = []
-        self.w = w
-        self.h = h
+
+        # les dimensions de l'espace de la simulation
+        self.largeur_sim = largeur_sim
+        self.hauteur_sim = hauteur_sim
+
+        # La liste de l'abscisse
         self.y = [0]
-        self.data = {"Sains": [], "Infectés": [], "Rétablis": []}
-        self.data_font = pygame.font.SysFont("montserrat", 18)
-        self.font = pygame.font.SysFont("montserrat", 24)
+
+        # Les données de la simulation
+        self.donnees = {"Sains": [], "Infectés": [], "Rétablis": []}
+        # Les polices d'écriture pour l'affichage
+        self.police_donnees = pygame.font.SysFont("montserrat", 18)
+        self.police = pygame.font.SysFont("montserrat", 24)
+
+        # On met à jour et on enregistre les données
         self.reassignation()
         self.mise_a_jour_donnees()
-        self.screen = screen
+
+        # L'écran pour afficher les points
+        self.ecran = ecran
+        # Le comportement par défaut de la simulation
         self.comportement = Comportement.NORMAL
+        # Le nombre d'infectés au dessus duquel une quarantaine est déclarée, si elle doit l'être
         self.TAUX_INCIDENCE = taux_incidence
-        self.quarantine_time = []
-        self.threshold = threshold
+        # Les dates de début et fin de quarantaine
+        self.dates_quarantaine = []
+        # La proportion d'infecté en dessous de laquelle le comportement redevient un comportement normal
+        self.seuil = seuil
 
         # Largeur de la fenêtre
-        self.WIDTH = 700
+        self.LARGEUR = 700
         # Hauteur de la fenêtre
-        self.HEIGHT = 390
+        self.HAUTEUR = 390
         # Marge entre les bords de la fenêtre et le graphique
-        self.MARGIN = 30
+        self.MARGE = 30
         # Hauteur maximale du graphique
-        self.HAUT = self.HEIGHT - self.MARGIN
+        self.HAUT = self.HAUTEUR - self.MARGE
         # Longeur d'un trait
-        self.DHAUT = self.HAUT + 5
+        self.LONGEUR_TRAIT = self.HAUT + 5
         # La largeur du graphique
-        self.W = self.WIDTH - 2 * self.MARGIN
+        self.largeur_graph = self.LARGEUR - 2 * self.MARGE
         # la hauteur du grpahique
-        self.H = self.HEIGHT - 2 * self.MARGIN
+        self.hauteur_graph = self.HAUTEUR - 2 * self.MARGE
         # La distance au haut de la fenêtre
-        self.TOP = top
+        self.DIST_HAUT = 50
         # La distance à gauche du graphique du pays
-        self.LEFT = 1100
-        self.no_action = taux_incidence == 0
-        self.ended = False
-        self.comportement_urgence = comportement_urgence
+        self.GAUCHE = 1100
+        # Si on doit prendre des mesures d'urgence
+        self.mesure_urgence = taux_incidence != 0
+        # Si la simulation est termin
+        self.terminee = False
 
 
     def initialisation_affichage(self):
         """ Initialisation de l'affichage de la simulation
         ---
         """
-        if self.no_action:
-            center_text(self.screen, self.data_font, "Aucunes mesures", FG, 500, 20, self.TOP - 30, 1200)
-        for x, key in enumerate(self.data):
+        # On affiche une fois pour toute le comportement de la simulation si il ne changera pas
+        if not self.mesure_urgence:
+            centrer_texte(self.ecran, self.police_donnees, "Aucunes mesures", FG, 500, 20, self.DIST_HAUT - 30, 1200)
+        # Affichage de la légende
+        for x, clee in enumerate(self.donnees):
             pygame.draw.line(
-                self.screen, colors[x],
-                (1150 + 250 * x, self.TOP + 440),
-                (1250 + 250 * x, self.TOP + 440),
+                self.ecran, colors[x],
+                (1150 + 250 * x, self.DIST_HAUT + 440),
+                (1250 + 250 * x, self.DIST_HAUT + 440),
                 2)
-            center_text(self.screen, self.font, key, FG, 100, 50, self.TOP + 400, 1150 + 250 * x)
+            centrer_texte(self.ecran, self.police, clee, FG, 100, 50, self.DIST_HAUT + 400, 1150 + 250 * x)
 
-        mx = len(self.person)
-        dx = self.H / mx
+        # la valeur maximale du graphique
+        mx = len(self.personnes)
+        # Le coefficient de proportionalité pour ramener les valeurs sur le graphique
+        dx = self.hauteur_graph / mx
 
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT, self.MARGIN - 10 + self.TOP),
-                         (self.MARGIN + self.LEFT, self.HAUT + self.TOP), 2)
+        # L'axe des ordonnées
+        pygame.draw.line(self.ecran, FG, (self.MARGE + self.GAUCHE, self.MARGE - 10 + self.DIST_HAUT),
+                         (self.MARGE + self.GAUCHE, self.HAUT + self.DIST_HAUT), 2)
 
-        x_coord = get_scale_value(0, mx, 10)
+        # 10 points équirépartis sur l'axe des ordonnées
+        x_coord = echelloner_valeur(0, mx, 10)
         for x in x_coord:
             form = str(int(x))
-            w = self.data_font.size(form)[0]
+            largeur = self.police_donnees.size(form)[0]
             Y = self.HAUT - int(x * dx)
-            pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT, Y + self.TOP),
-                             (self.MARGIN - 5 + self.LEFT, Y + self.TOP), 2)
-            self.screen.blit(
-                self.data_font.render(form, True, FG),
-                ((self.MARGIN - w) + self.LEFT - 10, Y - 10 + self.TOP))
+            # On affiche les graduations et le nombre associé
+            pygame.draw.line(self.ecran, FG, (self.MARGE + self.GAUCHE, Y + self.DIST_HAUT),
+                             (self.MARGE - 5 + self.GAUCHE, Y + self.DIST_HAUT), 2)
+            self.ecran.blit(
+                self.police_donnees.render(form, True, FG),
+                ((self.MARGE - largeur) + self.GAUCHE - 10, Y - 10 + self.DIST_HAUT))
 
 
     def mise_a_jour_graphique(self):
         """ Affiche le graphique du pays donné
         ---
         """
-        mx = len(self.person)
+        # La valeur maximale des ordonées
+        mx = len(self.personnes)
+        # La valeur maximale de l'abcsisse (1 pour éviter une division par 0)
         my = max(self.y[-1], 1)
 
-        dx = self.H / mx
-        dy = self.W / my
+        # Les proporotions pour remettre les données à l'échelle
+        dx = self.hauteur_graph / mx
+        dy = self.largeur_graph / my
 
-        create_mask(self.TOP + self.MARGIN, self.LEFT + self.MARGIN + 2,
-                    self.WIDTH - 2 * self.MARGIN, self.HEIGHT - 2 * self.MARGIN, BG, self.screen)
-        # Update barre nombres
-        create_mask(self.TOP + self.HEIGHT - self.MARGIN + 2, self.LEFT + self.MARGIN - 10,
-                    self.WIDTH - self.MARGIN + 10, self.MARGIN, BG, self.screen)
+        # On "efface" le graphique
+        creer_masque(self.DIST_HAUT + self.MARGE, self.GAUCHE + self.MARGE + 2,
+                    self.LARGEUR - 2 * self.MARGE, self.HAUTEUR - 2 * self.MARGE, BG, self.ecran)
+        # On "efface" la barre de l'abcsisse
+        creer_masque(self.DIST_HAUT + self.HAUTEUR - self.MARGE + 2, self.GAUCHE + self.MARGE - 10,
+                    self.LARGEUR - self.MARGE + 10, self.MARGE, BG, self.ecran)
 
-        c_y = [x * dy + self.MARGIN + self.LEFT for x in self.quarantine_time]
+        # les abcsisses des date de quarantaine
+        c_y = [x * dy + self.MARGE + self.GAUCHE for x in self.dates_quarantaine]
 
+        # On affiche en violet les périodes de quarantaine
         for x in range((len(c_y) + 1) // 2):
+            # Si il existe un point après celui-ci, on sait où s'arrête
             if 2 * x + 1 < len(c_y):
-                create_mask(self.TOP + self.MARGIN, c_y[2 * x], c_y[2 * x + 1] - c_y[2 * x], self.HEIGHT - 2 * self.MARGIN, QC, self.screen)
+                creer_masque(self.DIST_HAUT + self.MARGE, c_y[2 * x], c_y[2 * x + 1] - c_y[2 * x], self.HAUTEUR - 2 * self.MARGE, QC, self.ecran)
+            # Sinon on s'arrête au bord du graphique
             else:
-                create_mask(self.TOP + self.MARGIN, c_y[2 * x], self.LEFT + self.WIDTH - self.MARGIN - c_y[2 * x], self.HEIGHT - 2 * self.MARGIN, QC, self.screen)
+                creer_masque(self.DIST_HAUT + self.MARGE, c_y[2 * x], self.GAUCHE + self.LARGEUR - self.MARGE - c_y[2 * x], self.HAUTEUR - 2 * self.MARGE, QC, self.ecran)
 
-        for key in self.data:
-            c_x = [(mx - x) * dx + self.MARGIN + self.TOP for x in self.data[key]]
-            c_y = [x * dy + self.MARGIN + self.LEFT for x in self.y]
+        # On trace les courbes
+        for clee in self.donnees:
+            c_x = [(mx - x) * dx + self.MARGE + self.DIST_HAUT for x in self.donnees[clee]]
+            c_y = [x * dy + self.MARGE + self.GAUCHE for x in self.y]
             pts = list(zip(c_y, c_x))
             for x in range(len(pts) - 1):
-                pygame.draw.line(self.screen, colors[list(self.data.keys()).index(key)], pts[x], pts[x + 1], 2)
+                pygame.draw.line(self.ecran, colors[list(self.donnees.keys()).index(clee)], pts[x], pts[x + 1], 2)
 
-        y_coord = get_scale_value(0, my, 10)
+        # On affiche la légende de l'abcsisse
+        y_coord = echelloner_valeur(0, my, 10)
         for y in y_coord:
-            X = self.MARGIN + int(y * dy)
+            X = self.MARGE + int(y * dy)
             d = str(int(y))
-            w, _ = self.font.size(d)
-            pygame.draw.line(self.screen, FG, (self.LEFT + X, self.HAUT + self.TOP),
-                             (self.LEFT + X, self.DHAUT + self.TOP), 2)
-            self.screen.blit(self.data_font.render(d, True, FG), (self.LEFT + X - w // 2 + 7, self.DHAUT + self.TOP))
+            largeur, _ = self.police.size(d)
+            pygame.draw.line(self.ecran, FG, (self.GAUCHE + X, self.HAUT + self.DIST_HAUT),
+                             (self.GAUCHE + X, self.LONGEUR_TRAIT + self.DIST_HAUT), 2)
+            self.ecran.blit(self.police_donnees.render(d, True, FG), (self.GAUCHE + X - largeur // 2 + 7, self.LONGEUR_TRAIT + self.DIST_HAUT))
 
-        pygame.draw.line(self.screen, FG, (self.MARGIN + self.LEFT, self.HAUT + self.TOP),
-                         (self.WIDTH - self.MARGIN + 10 + self.LEFT, self.HAUT + self.TOP), 2)
+        # On affiche l'axe des abcsisse
+        pygame.draw.line(self.ecran, FG, (self.MARGE + self.GAUCHE, self.HAUT + self.DIST_HAUT),
+                         (self.LARGEUR - self.MARGE + 10 + self.GAUCHE, self.HAUT + self.DIST_HAUT), 2)
 
 
     def mise_a_jour_donnees(self):
         """ Met à jour les données de la simulation
         ---
         """
-        self.data["Sains"].append(len(self.sains))
-        self.data["Infectés"].append(len(self.infectes))
-        self.data["Rétablis"].append(len(self.retablis))
+        self.donnees["Sains"].append(len(self.sains))
+        self.donnees["Infectés"].append(len(self.infectes))
+        self.donnees["Rétablis"].append(len(self.retablis))
 
 
     def reassignation(self):
@@ -336,13 +400,17 @@ class Simulation:
         ---
         """
         p = 0
+        # Tant que l'on a pas regarde chaque personne de self.infectes
         while len(self.infectes) - p > 0:
+            # Si la personne est rétablie on la déplace
             if self.infectes[p].etat == Etat.RETABLI:
                 self.retablis.append(self.infectes[p])
                 self.infectes.pop(p)
+            # Sinon on passe à la personne suivante
             else:
                 p += 1
         p = 0
+        # On fait de même avec les personnes saines
         while len(self.sains) - p > 0:
             if self.sains[p].etat == Etat.INFECTE:
                 self.infectes.append(self.sains[p])
@@ -355,19 +423,22 @@ class Simulation:
         """ Affiche la simulation
         ---
         """
-        create_mask(self.TOP - 50, -20, self.w + 100, self.h + 20, BG, self.screen)
-        pygame.draw.line(self.screen, pygame.Color(200, 200, 200), (0, self.TOP - 50), (self.w, self.TOP - 50))
+        # On "efface" l'espace de simulation
+        creer_masque(self.DIST_HAUT - 50, -20, self.largeur_sim + 100, self.hauteur_sim + 20, BG, self.ecran)
+        # On trace les ligne du contour de l'espace
+        pygame.draw.line(self.ecran, pygame.Color(200, 200, 200), (0, self.DIST_HAUT - 50), (self.largeur_sim, self.DIST_HAUT - 50))
         pygame.draw.line(
-            self.screen, pygame.Color(200, 200, 200),
-            (self.w, self.TOP - 50),
-            (self.w, self.h + self.TOP - 50))
+            self.ecran, pygame.Color(200, 200, 200),
+            (self.largeur_sim, self.DIST_HAUT - 50),
+            (self.largeur_sim, self.hauteur_sim + self.DIST_HAUT - 50))
         pygame.draw.line(
-            self.screen, pygame.Color(200, 200, 200),
-            (self.w, self.h + self.TOP - 50),
-            (0, self.h + self.TOP - 50))
-        pygame.draw.line(self.screen, pygame.Color(200, 200, 200), (0, self.h + self.TOP - 50), (0, self.TOP - 50))
-        [p.afficher(self.screen, self.TOP - 50) for p in self.person]
-        # dernière action du tour
+            self.ecran, pygame.Color(200, 200, 200),
+            (self.largeur_sim, self.hauteur_sim + self.DIST_HAUT - 50),
+            (0, self.hauteur_sim + self.DIST_HAUT - 50))
+        pygame.draw.line(self.ecran, pygame.Color(200, 200, 200), (0, self.hauteur_sim + self.DIST_HAUT - 50), (0, self.DIST_HAUT - 50))
+        # On affiche chaque personne
+        [p.afficher(self.ecran, self.DIST_HAUT - 50) for p in self.personnes]
+        # On enregistre ce tour
         self.y.append(len(self.y))
 
 
@@ -375,38 +446,50 @@ class Simulation:
         """ Change les chiffres de la simulation
         ---
         """
-        if not self.no_action:
-            create_mask(self.TOP - 30, 1200, 500, 100, BG, self.screen)
-            center_text(self.screen, self.data_font, "Comportement de la population : " + str(self.comportement), FG, 500, 20, self.TOP - 30, 1200)
-            center_text(self.screen, self.data_font,
-                        f"Taux d'incidence : {self.TAUX_INCIDENCE}", FG, 500, 20, self.TOP, 1200)
-        for x, key in enumerate(self.data):
-            create_mask(self.TOP + 455, 1150 + 250 * x, 100, 20, BG, self.screen)
-            center_text(
-                self.screen, self.data_font, str(self.data[key][-1]),
-                FG, 100, 20, self.TOP + 455, 1150 + 250 * x)
+        # On change les informations si elles sont susceptibles de changer
+        if self.mesure_urgence:
+            # On "efface" l'en-tête du graphique et on affiche les informations
+            creer_masque(self.DIST_HAUT - 30, 1200, 500, 100, BG, self.ecran)
+            centrer_texte(self.ecran, self.police_donnees, "Comportement de la population : " + str(self.comportement), FG, 500, 20, self.DIST_HAUT - 30, 1200)
+            centrer_texte(self.ecran, self.police_donnees,
+                        f"Taux d'incidence : {self.TAUX_INCIDENCE}", FG, 500, 20, self.DIST_HAUT, 1200)
+        # On met à jour le nombre de personnes dans chaque partie
+        for x, clee in enumerate(self.donnees):
+            creer_masque(self.DIST_HAUT + 455, 1150 + 250 * x, 100, 20, BG, self.ecran)
+            centrer_texte(
+                self.ecran, self.police_donnees, str(self.donnees[clee][-1]),
+                FG, 100, 20, self.DIST_HAUT + 455, 1150 + 250 * x)
 
 
     def mise_a_jour(self):
         """ Met à jour la simulation
         ---
         """
-        for p in self.person:
-            p.mise_a_jour(self.w, self.h, self.person)
-        for p in self.infectes:
-            if random.randint(0, 100) <= p.p * 100:
-                for n in self.sains:
-                    if p.collision(n):
-                        n.etat = Etat.INFECTE
+        # On met à jour chaque personne
+        for personnne in self.personnes:
+            personnne.mise_a_jour(self.largeur_sim, self.hauteur_sim, self.personnes)
+        # On regarde si il y a collision entre une personne infectée et une personne saine
+        for personnne in self.infectes:
+            # On a une probabilité p d'infecter une personne saine
+            if random.randint(0, 100) <= personnne.p * 100:
+                # Si le conctact doit infecter, on regarde la collision avec chaque personne saine
+                for sain in self.sains:
+                    # Si il y a collision
+                    if personnne.collision(sain):
+                        # La personne est alors infectée
+                        sain.etat = Etat.INFECTE
+        # Tant qu'il y a des infectés, il peut se passer quelque chose
         if len(self.infectes) > 0:
+            # On réassigne les personnes et on fait avancer la simulation d'une itération
             self.reassignation()
             self.mise_a_jour_comportement()
             self.mise_a_jour_donnees()
             self.mise_a_jour_texte()
             self.mise_a_jour_graphique()
+        # Sinon, la simulation est terminée
         else:
-            if not self.ended:
-                self.ended = True
+            self.terminee = True
+        # On met à jour l'affichage
         pygame.display.update()
 
 
@@ -414,105 +497,120 @@ class Simulation:
         """ Met à jour le comportement de la simulation
         ---
         """
-        if not self.no_action:
+        # Si des mesures doivent être prises
+        if self.mesure_urgence:
+            # Si le nombre d'infecté dépasse le seuil critique et qu'aucune mesures n'est actuellement appliquée
             if len(self.infectes) > self.TAUX_INCIDENCE and self.comportement == Comportement.NORMAL:
-                self.quarantine_time.append(self.y[-1])
-                if self.comportement_urgence == Comportement.QUARANTAINE:
-                    self.comportement = Comportement.QUARANTAINE
-                    for p in self.person:
-                        p.comportement = Comportement.QUARANTAINE
-                else:
-                    self.comportement = Comportement.CONFINEMENT
-                    for p in self.infectes:
-                        p.comportement = Comportement.QUARANTAINE
-            elif len(self.infectes) < self.TAUX_INCIDENCE * self.threshold and self.comportement == Comportement.QUARANTAINE:
+                # On commence une quarantaine
+                self.dates_quarantaine.append(self.y[-1])
+                self.comportement = Comportement.QUARANTAINE
+                # Toutes les personnes doivent s'éviter
+                for p in self.personnes:
+                    p.comportement = Comportement.QUARANTAINE
+            # Si le nombre d'infecté est en dessous d'une proportion du seuil critique est qu'une quarantaine est en cours, on y met fin
+            elif len(self.infectes) < self.TAUX_INCIDENCE * self.seuil and self.comportement == Comportement.QUARANTAINE:
+                # On met fin à la quarantaine
+                self.dates_quarantaine.append(self.y[-1])
                 self.comportement = Comportement.NORMAL
-                self.quarantine_time.append(self.y[-1])
-                if self.comportement_urgence == Comportement.QUARANTAINE:
-                    for p in self.person:
-                        p.comportement = Comportement.NORMAL
-                else:
-                    for p in self.infectes:
-                        p.comportement = Comportement.NORMAL
+                # Les personnes peuvent se déplacer normallement
+                for p in self.personnes:
+                    p.comportement = Comportement.NORMAL
 
 
+# On lance le moteur graphique
 pygame.init()
 info = pygame.display.Info()
-screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
-screen.fill(BG)
 
-w = info.current_w // 2 - 10
-h = info.current_h - 10
+# On crée l'écran
+ecran = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
+ecran.fill(BG)
 
+# On récupère les dimensios de l'espace de simulation
+largeur_sim = info.current_w // 2 - 10
+hauteur_sim = info.current_h - 10
 
-TOP = 50
-SAVE = False
+# Le nombre de simulation à faire
 NB_SIM = 1
-
-S = 100
-NB_PERSON = 1200
-THRESHOLD = 0.3
+# Le fraction du seuil critique pour arrêter la quarantaine
+SEUIL = 0.3
+# Si on doit sauvegarder
+SAUVEGARDER = False
+# Le nombre de personnes de la simulation
+NB_PERSONNES = 1200
+# Le nombre de personnes infectés critique
+TAUX_INCIDENCE = 100
+# Le dossier de sauvegarde
+NOM_DOSSIER = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {TAUX_INCIDENCE}"
 
 
 for _ in range(NB_SIM):
-    person = []
-    for k in range(NB_PERSON):
+    # On crée aléatoirment les personnes
+    personnes = []
+    for k in range(NB_PERSONNES):
         v, theta = random.randint(0, 500) / 100, random.randint(0, 628) / 100
         vx, vy = v * math.cos(theta), v * math.sin(theta)
-        person.append(
-            Person(k,
-                random.randint(0, w),
-                random.randint(0, h),
+        personnes.append(
+            Personne(k,
+                random.randint(0, largeur_sim),
+                random.randint(0, hauteur_sim),
                 vx, vy, 0, 0, .5, 6))
 
-
-    Sim = Simulation(person, w, h, screen, TOP, S, THRESHOLD, Comportement.QUARANTAINE)
+    # On initialise la simulation
+    Sim = Simulation(personnes, largeur_sim, hauteur_sim, ecran, TAUX_INCIDENCE, SEUIL)
     Sim.initialisation_affichage()
+
+    # On crée une table dans la base de donnée pour enregistrer les donnée de la simulation
+    if SAUVEGARDER:
+        # On crée le dossier s'il n'existe pas
+        if not os.path.exists(NOM_DOSSIER):
+            os.makedirs(NOM_DOSSIER)
+        # On se déplace dans ce dossier
+        os.chdir(NOM_DOSSIER)
+        # On se connecte à la base de donnée
+        bdd = sqlite3.connect("result.db", check_same_thread=False)
+        curseur = bdd.cursor()
+        # On récupère le nombre de simulation
+        l = len(curseur.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall())
+        # On crée une table portant le numéro suivant
+        curseur.execute(f"""CREATE TABLE IF NOT EXISTS Sim{l} (id integer PRIMARY KEY, {",".join([f'{clee} int' for clee in Sim.donnees])})""")
+
+
     x = 0
-
-
-    if SAVE:
-        titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}"
-        if not os.path.exists(titre):
-            os.makedirs(titre)
-        os.chdir(titre)
-        data_base = sqlite3.connect("result.db", check_same_thread=False)
-        cursor = data_base.cursor()
-        l = len(cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall())
-        cursor.execute(f"""CREATE TABLE IF NOT EXISTS Sim{l} (id integer PRIMARY KEY, {",".join([f'{key} int' for key in Sim.data])})""")
-
-
-    DATA_SAVED = False
-
-    while not Sim.ended:
+    # Boucle principale de la simulation
+    while not Sim.terminee:
+        # On gère les interactions avec l'utilisateur
         for event in pygame.event.get():
+            # Si on appuie sur Échap
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                # On ferme le programme
                 quit()
+
+        # On attend entre chaque itération
         time.sleep(.01)
+        # On met à jour la simulation
         Sim.mise_a_jour()
+        # On l'affiche
         Sim.afficher()
-        if SAVE:
-            if not Sim.ended:
-                pygame.image.save(screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}\\img{x}.jpg")
-            elif not DATA_SAVED:
-                for k in range(x):
-                    cursor.execute(f"""INSERT INTO Sim{l} VALUES (NULL, {",".join([str(Sim.data[key][k] / NB_PERSON) for key in Sim.data])})""")
-                data_base.commit()
-                data_base.close()
-                DATA_SAVED = True
+        if SAUVEGARDER:
+            # On sauvegarde les nouvelles données
+            curseur.execute(f"""INSERT INTO Sim{l} VALUES (NULL, {",".join([str(Sim.donnees[clee][x] / NB_PERSONNES) for clee in Sim.donnees])})""")
+            bdd.commit()
             x += 1
 
-    titre = f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}"
-    if not os.path.exists(titre):
-        os.makedirs(titre)
-    pygame.image.save(Sim.screen, f"E:\\Python\\Projet\\TIPE\\Modele_epidemiologique\\app\\Simulation\\Taux incidence {S}\\Résultat - Personnes {NB_PERSON}, Comportement {str(Sim.comportement_urgence)}, Threshold {THRESHOLD}.jpg")
+    # On ferme la base de donnée
+    if SAUVEGARDER:
+        bdd.close()
+
+    # On crée le dossier s'il n'existe pas
+    if not os.path.exists(NOM_DOSSIER):
+        os.makedirs(NOM_DOSSIER)
+
+    # On sauvegarde la dernière image de la simulation
+    pygame.image.save(Sim.ecran, f"{NOM_DOSSIER}\\Résultat - Personnes {NB_PERSONNES}, SEUIL {SEUIL}.jpg")
 
 
 # TODO:
-#       - pt attractif
-#       - afficher reg°
-#       - opti° reg°
+#       - opti affichage (au centre)
 
 # pb test
 # https://jamanetwork.com/journals/jama/fullarticle/2762130

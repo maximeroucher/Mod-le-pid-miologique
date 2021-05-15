@@ -3,17 +3,18 @@ import os
 
 import msgpack
 import numpy as np
+# Cette bibliothète convertit le code python en code C pour accelérer les calculs
 from numba import njit
 
 
 def relu(x):
     """ La fonction de régression linéaire
     ---
-    param :
+    paramètre :
 
         - x (float)
 
-    result :
+    résultat :
 
         float
     """
@@ -23,528 +24,305 @@ def relu(x):
 def relu_der(x):
     """ La dérivée de la régression linéaire
     ---
-    param :
+    paramètre :
 
         - x (float)
 
-    result :
+    résultat :
 
         float
     """
     return 0 if x <= 0 else 1
 
+
 @njit
 def sigmoid(x):
     """ La fonction sigmoid
     ---
-    param :
+    paramètre :
 
         - x (float)
 
-    result :
+    résultat :
 
         float
     """
     return 1 / (1 + np.exp(-x))
 
+
 @njit
 def sigmoid_der(x):
     """ La dérivé de la fonction sigmoid (x = sigmoid(y))
     ---
-    param :
+    paramètre :
 
         - x (float)
 
-    result :
+    résultat :
 
         float
     """
     return x * (1 - x)
 
 
-def _feedforward(entry, weights, bias):
-    return sigmoid(np.dot(entry, weights) + bias)
+def _calcule_sortie(entree, poids, biais):
+    """ Calcul la sortie du réseau en fonction de l'entrée
+    ---
+    paramètres :
+
+        - entree (np.matrix) la matrice des valeurs d'entrée
+        - poids (np.matrix) la matrice de poids
+        - biais (np.matrix) la matrice des biais
+
+    résultat :
+
+        - np.matrix
+    """
+    return sigmoid(np.dot(entree, poids) + biais)
 
 
 @njit
-def _correct(err, input, weights, bias, lr, activations):
-    err = np.multiply(err, sigmoid_der(activations))
-    d_weights = np.dot(input.T, err)
-    d_bias = d_weights.sum(axis=0)
-    n_err = np.dot(err, weights.T)
-    weights += lr * d_weights
-    bias += lr * d_bias
-    return weights, bias, n_err
+def _retropropagation(erreur, input, poids, biais, lr, activations):
+    """ Calcule la rétropropagation des poids et biais
+    ---
+    paramètres :
+
+        - erreur (np.matrix) la matrice d'erreur
+        - input (np.matrix) la matrice des valeurs d'entrées
+        - poids (np.matrix) la matrice des poids
+        - biais (np.matrix) la matrice des biais
+        - lr (float, 0 <= lr <= 1) le taux d'apprentissage
+        - activations (np.matrix) la matrice de sortie de _calcule_sortie
+
+    résultats :
+
+        - np.matrix (la matrice de poids modifiée)
+        - np.matrix (la matrice de biais modifiée)
+        - np.matrix (la nouvelle matrice d'erreur)
+    """
+    # Calcul l'erreur de chaque coefficient
+    erreur = np.multiply(erreur, sigmoid_der(activations))
+    # Calcule la jacobienne des poids
+    d_poids = np.dot(input.T, erreur)
+    # Calcule la jacobienne des biais
+    d_biais = d_poids.sum(axis=0)
+    # Calcule l'erreur d'entrée
+    n_erreur = np.dot(erreur, poids.T)
+    # Met à jour les poids et biais
+    poids += lr * d_poids
+    biais += lr * d_biais
+    return poids, biais, n_erreur
 
 
 # https://dustinstansbury.github.io/theclevermachine/derivation-backpropagation
 
-class RecNN:
+class RNN:
 
-    def __init__(self, layer_dim, n, lr):
-        """ Initialisation du réseau de neurone récursif
+    def __init__(self, dimension_couche, n, lr):
+        """ Initialisation récursive du réseau de neurone
         ---
-        param :
+        paramètres :
 
-            - layer_dim (list(int), len >= 2) l'architecture du réseau
+            - dimension_couche (list(int), len >= 2) l'architecture du réseau
             - n (int) le numéro de la couche
             - lr (float, 0 < lr <= 1) le taux d'apprentissage
         """
-        self.nb_train = 0
-        self.last_child = None
+        self.nb_entrainement = 0
+        self.dernier_enfant = None
         self.parent = None
-        self.child = None
+        self.enfant = None
         self.num = n
         self.lr = lr
-        self.nb_inputs, self.nb_neurons = layer_dim[0], layer_dim[1]
-        self.weights = np.random.randn(self.nb_inputs, self.nb_neurons)
-        self.bias = np.zeros(layer_dim[1])
-        self.layer_dim = layer_dim
-        self.use_json = False
-        self.filename = ""
-        if len(layer_dim) > 2:
-            self.child = RecNN(layer_dim[1:], n + 1, lr)
-            self.child.parent = self
-            self.last_child = self.child.last_child
+        # De manière récursive le nb de neurones de cette couche est celui d'entrée de la couche suivante
+        self.nb_entree, self.nb_neurones = dimension_couche[0], dimension_couche[1]
+        # On crée la matrice de poids de manière aléatoire
+        self.poids = np.random.randn(self.nb_entree, self.nb_neurones)
+        # On initialisee les poids à 0 par défaut
+        self.biais = np.zeros(dimension_couche[1])
+        self.dimension_couche = dimension_couche
+        # Le type de fichier de sauvegarde, par défaut les fichier msgpack sont plus compactes et plus précis, mais json est lisible
+        self.utiliser_json = False
+        self.nom_fichier = ""
+        # Si on peut encore crée une couche
+        if len(dimension_couche) > 2:
+            # le réseau enfant
+            self.enfant = RNN(dimension_couche[1:], n + 1, lr)
+            # On met en place les relation d'hérédité
+            self.enfant.parent = self
+            self.dernier_enfant = self.enfant.dernier_enfant
         else:
-            self.last_child = self
+            self.dernier_enfant = self
 
 
     def __str__(self):
         """ Représentation écrite du réseau
         ---
-        result :
+        résultat :
 
             str
         """
-        s = f"Layer n° {self.num}\npoids :\n{self.weights}\nbias :\n{self.bias}"
-        if self.child:
-            s += "\n\n" + self.child.__str__()
+        s = f"Couche n° {self.num}\npoids :\n{self.poids}\nbiais :\n{self.biais}"
+        if self.enfant:
+            s += "\n\n" + self.enfant.__str__()
         return s
 
 
-    def feedforward(self, entry):
+    def calcule_sortie(self, entree):
         """ Calcul de la prédiction du réseau
         ---
-        param :
+        paramètre :
 
-            - entry (list(list(float)), len = layer_dim[0]) les donnée en entrée du réseau
+            - entree (list(list(float)), len = dimension_couche[0]) les donnée en entrée du réseau
 
-        result :
+        résultat :
 
             list(list(float))
         """
-        self.input = entry
-        self.activations = _feedforward(entry, self.weights, self.bias)
-        if not self.child:
+        # On sauvegarde les données en entrée
+        self.input = entree
+        # On calcule la répoonse de la couche
+        self.activations = _calcule_sortie(entree, self.poids, self.biais)
+        # Si c'est la derniere couche
+        if not self.enfant:
             return self.activations
-        return self.child.feedforward(self.activations)
+        # Sinon on utilise la récursivité
+        return self.enfant.calcule_sortie(self.activations)
 
 
-    def backprop(self, err):
-        """ Réévaluation des poids et bias du réseau en fonction de l'erreur
+    def retropropagation(self, erreur):
+        """ Réévaluation des poids et biais du réseau en fonction de l'erreur
         ---
-        param :
+        paramètre :
 
-            - err (list(list(float)), dim = layer_dim[-1]) l'erreur commise par le réseau
+            - erreur (list(list(float)), dim = dimension_couche[-1]) l'erreur commise par le réseau
         """
-        self.weights, self.bias, n_err = _correct(err, self.input, self.weights, self.bias, self.lr, self.activations)
+        # On modifie les poids et biais et on transmet l'erreur récursivement
+        self.poids, self.biais, n_erreur = _retropropagation(erreur, self.input, self.poids, self.biais, self.lr, self.activations)
         if self.parent:
-            self.parent.backprop(n_err)
+            self.parent.retropropagation(n_erreur)
 
 
-    def train(self, x, y):
+    def entrainer(self, donnee_entrainement, donnee_test):
         """ Lance une prédiction et corrige en fonction du résultat
         ---
-        param :
+        paramètres :
 
             - x (list(list(float))) les données en entrée du réseau
             - y (list(list(float))) les données attendue en fin de réseau
         """
-        o = self.feedforward(np.array(x))
-        d_err = 2 * (y - o)
-        self.last_child.backprop(d_err)
+        # Prédiction du réseau
+        sortie = self.calcule_sortie(np.array(donnee_entrainement))
+        # Calcul de l'erreur
+        erreur = 2 * (donnee_test - sortie)
+        # Corrige le réseau
+        self.dernier_enfant.retropropagation(erreur)
 
 
-    def save_aux(self, data):
+    def sauvegarde_rec(self, donnee):
         """ Fonction récursive auxilliare de sauvegarde du réseau
         ---
-        param :
+        paramètre :
 
-            - data (dict(numéro de la couche (str): {w : list(list(float)), b : list(list(float))}))
+            - donnee (dict(numéro de la couche (str): {w : list(list(float)), b : list(list(float))}))
 
-        result :
+        résultat :
 
             dict(numéro de la couche (str): {w : list(list(float)), b : list(list(float))})
         """
-        data[f'{self.num}'] = {"w": self.weights.tolist(), "b": self.bias.tolist()}
-        if not self.child:
-            return data
-        return self.child.save_aux(data)
+        # On ajoute les données au dictionnaire
+        donnee[f'{self.num}'] = {"w": self.poids.tolist(), "b": self.biais.tolist()}
+        # On le complète récursivement
+        if not self.enfant:
+            return donnee
+        return self.enfant.sauvegarde_rec(donnee)
 
 
-    def save(self, use_json=True):
+    def sauvegarder(self, utiliser_json=True):
         """ Enregistre le réseau
         ---
+        paramètre :
+
+            - utiliser_json (bool) choix du type de fichier de sauvegarde
         """
+        # On crée le dossier s'il n'existe pas
         if not os.path.exists("./Model"):
             os.makedirs("./Model")
-        data = self.save_aux({'lr': self.lr})
-        if self.use_json:
-            json.dump(data, open(f"./Model/{self.get_name()}.json", "w"))
+        # On crée le dictionnaire des données
+        donnee = self.sauvegarde_rec({'lr': self.lr})
+        # On sauvegarde
+        if self.utiliser_json:
+            json.dump(donnee, open(f"./Model/{self.nom}.json", "w"))
         else:
-            with open(f"./Model/{self.get_name()}.msgpack", "wb") as outfile:
-                packed = msgpack.packb(data)
-                outfile.write(packed)
+            fichier_sortie = open(f"./Model/{self.nom}.msgpack", "wb")
+            donnees_binaires = msgpack.packb(donnee)
+            fichier_sortie.write(donnees_binaires)
 
 
-    def get_name(self):
-        return "struct(" + "-".join([str(x) for x in self.layer_dim]
-                                         ) + ")-lr(" + str(self.lr) + ")" + f"-tr({self.nb_train})"
+    @property
+    def nom(self):
+        """ Donne le nom du réseau
+        ---
+        résultat :
+
+            - str (le nom)
+        """
+        return "struct(" + "-".join([str(x) for x in self.dimension_couche]
+                                         ) + ")-lr(" + str(self.lr) + ")" + f"-tr({self.nb_entrainement})"
 
 
-    def load(self, filename):
+    def charger(self, nom_fichier):
         """ Charge le réseau depuis le fichier
         ---
-        param :
+        paramètre :
 
-            - filename (str) le nom du fichier
+            - nom_fichier (str) le nom du fichier
         """
-        self.filename = filename
-        if filename.endswith(".json"):
-            data = json.load(open(filename))
+        self.nom_fichier = nom_fichier
+        # On ouvre le fichier en fonction de son type
+        if nom_fichier.endswith(".json"):
+            donnee = json.load(open(nom_fichier))
             self.json = True
-        elif filename.endswith(".msgpack"):
-            with open(filename, "rb") as data_file:
-                byte_data = data_file.read()
-                data = msgpack.unpackb(byte_data)
-        self.name = os.path.basename(filename)
-        self.set_params(data)
+        elif nom_fichier.endswith(".msgpack"):
+            with open(nom_fichier, "rb") as donnee_file:
+                byte_donnee = donnee_file.read()
+                donnee = msgpack.unpackb(byte_donnee)
+        # le nom du fichier
+        self.name = os.path.basename(nom_fichier)
+        # On paramètre le réseau
+        self.parametrer(donnee)
 
 
-    def set_params(self, data):
-        """ Assigne au poids et bias les valeurs données
+    def parametrer(self, donnee):
+        """ Assigne au poids et biais les valeurs données
         ---
-        param :
+        paramètre :
 
-            - data (dict(numéro de la couche (str): {w : list(list(float)), b : list(list(float))}))
+            - donnee (dict(numéro de la couche (str): {w : list(list(float)), b : list(list(float))}))
         """
-        layer = data[f'{self.num}']
-        self.weights = np.array(layer['w'])
-        self.bias = np.array(layer['b'])
-        if self.child:
-            self.child.set_params(data)
+        # On assigne les poids et biais en fonction des valeurs
+        couche = donnee[f'{self.num}']
+        self.poids = np.array(couche['w'])
+        self.biais = np.array(couche['b'])
+        # On complète récursivement
+        if self.enfant:
+            self.enfant.parametrer(donnee)
 
 
     @staticmethod
-    def load_from_file(filename):
+    def charger_depuis_fichier(nom_fichier):
         """ Charge le réseau depuis le fichier donné
         ---
-        param :
+        paramètre :
 
-            - filename (str) le nom du fichier
+            - nom_fichier (str) le nom du fichier
         """
-        layer_dim = [int(x) for x in filename.split("struct(")[1].split(")")[0].split("-")]
-        lr = float(filename.split("lr(")[1].split(")")[0])
-        t = int(filename.split("tr(")[1].split(")")[0])
-        NN = RecNN(layer_dim, 0, lr)
-        NN.load(filename)
-        NN.nb_train = t
+        # On extrait les informations du réseau depuis le nom du fichier
+        dimension_couche = [int(x) for x in nom_fichier.split("struct(")[1].split(")")[0].split("-")]
+        lr = float(nom_fichier.split("lr(")[1].split(")")[0])
+        t = int(nom_fichier.split("tr(")[1].split(")")[0])
+        # On crée un réseaau
+        NN = RNN(dimension_couche, 0, lr)
+        # On charge les valeurs enregistrées
+        NN.charger(nom_fichier)
+        NN.nb_entrainement = t
         return NN
-
-
-"""
-import numpy as np
-
-class RecurrentNeuralNetwork:
-    #input (in t), expected output (shifted by one time step), num of words (num of recurrences), array of expected outputs, learning rate
-
-    def __init__(self, input, output, recurrences, expected_output, learning_rate):
-        #initial input
-        self.x = np.zeros(input)
-        #input size
-        self.input = input
-        #expected output (shifted by one time step)
-        self.y = np.zeros(output)
-        #output size
-        self.output = output
-        #weight matrix for interpreting results from hidden state cell (num words x num words matrix)
-        #random initialization is crucial here
-        self.w = np.random.random((output, output))
-        #matrix used in RMSprop in order to decay the learning rate
-        self.G = np.zeros_like(self.w)
-        #length of the recurrent network - number of recurrences i.e num of inputs
-        self.recurrences = recurrences
-        #learning rate
-        self. = learning_rate
-        #array for storing inputs
-        self.ia = np.zeros((recurrences + 1, input))
-        #array for storing cell states
-        self.ca = np.zeros((recurrences + 1, output))
-        #array for storing outputs
-        self.oa = np.zeros((recurrences + 1, output))
-        #array for storing hidden states
-        self.ha = np.zeros((recurrences + 1, output))
-        #forget gate
-        self.af = np.zeros((recurrences + 1, output))
-        #input gate
-        self.ai = np.zeros((recurrences + 1, output))
-        #cell state
-        self.ac = np.zeros((recurrences + 1, output))
-        #output gate
-        self.ao = np.zeros((recurrences + 1, output))
-        #array of expected output values
-        self.expected_output = np.vstack((np.zeros(expected_output.shape[0]), expected_output.T))
-        #declare LSTM cell (input, output, amount of recurrence, learning rate)
-        self.LSTM = LSTM(input, output, recurrences, learning_rate)
-
-    #activation function. simple nonlinearity, converts influx floats into probabilities between 0 and 1
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-
-
-    #the derivative of the sigmoid function. We need it to compute gradients for backpropagation
-    def dsigmoid(self, x):
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
-
-
-    #Here is where magic happens: We apply a series of matrix operations to our input and compute an output
-    def forwardProp(self):
-        for i in range(1, self.recurrences + 1):
-            self.LSTM.x = np.hstack((self.ha[i - 1], self.x))
-            cs, hs, f, c, o = self.LSTM.forwardProp()
-            #store cell state from the forward propagation
-            self.ca[i] = cs  # cell state
-            self.ha[i] = hs  # hidden state
-            self.af[i] = f  # forget state
-            self.ai[i] = inp  # inpute gate
-            self.ac[i] = c  # cell state
-            self.ao[i] = o  # output gate
-            self.oa[i] = self.sigmoid(np.dot(self.w, hs))  # activate the weight*input
-            self.x = self.expected_output[i - 1]
-        return self.oa
-
-
-    def backProp(self):
-        #Backpropagation of our weight matrices (Both in our Recurrent network + weight matrices inside LSTM cell)
-        #start with an empty error value
-        totalError = 0
-        #initialize matrices for gradient updates
-        #First, these are RNN level gradients
-        #cell state
-        dfcs = np.zeros(self.output)
-        #hidden state,
-        dfhs = np.zeros(self.output)
-        #weight matrix
-        tu = np.zeros((self.output, self.output))
-        #Next, these are LSTM level gradients
-        #forget gate
-        tfu = np.zeros((self.output, self.input + self.output))
-        #input gate
-        tiu = np.zeros((self.output, self.input + self.output))
-        #cell unit
-        tcu = np.zeros((self.output, self.input + self.output))
-        #output gate
-        tou = np.zeros((self.output, self.input + self.output))
-        #loop backwards through recurrences
-        for i in range(self.recurrences, -1, -1):
-            #error = calculatedOutput - expectedOutput
-            error = self.oa[i] - self.expected_output[i]
-            #calculate update for weight matrix
-            #Compute the partial derivative with (error * derivative of the output) * hidden state
-            tu += np.dot(np.atleast_2d(error * self.dsigmoid(self.oa[i])), np.atleast_2d(self.ha[i]).T)
-            #Now propagate the error back to exit of LSTM cell
-            #1. error * RNN weight matrix
-            error = np.dot(error, self.w)
-            #2. set input values of LSTM cell for recurrence i (horizontal stack of array output, hidden + input)
-            self.LSTM.x = np.hstack((self.ha[i - 1], self.ia[i]))
-            #3. set cell state of LSTM cell for recurrence i (pre-updates)
-            self.LSTM.cs = self.ca[i]
-            #Finally, call the LSTM cell's backprop and retreive gradient updates
-            #Compute the gradient updates for forget, input, cell unit, and output gates + cell states + hiddens states
-            fu, iu, cu, ou, dfcs, dfhs = self.LSTM.backProp(
-                error, self.ca[i - 1],
-                self.af[i],
-                self.ai[i],
-                self.ac[i],
-                self.ao[i],
-                dfcs, dfhs)
-            #Accumulate the gradients by calculating total error (not necesarry, used to measure training progress)
-            totalError += np.sum(error)
-            #forget gate
-            tfu += fu
-            #input gate
-            tiu += iu
-            #cell state
-            tcu += cu
-            #output gate
-            tou += ou
-        #update LSTM matrices with average of accumulated gradient updates
-        self.LSTM.update(tfu / self.recurrences, tiu / self.recurrences, tcu / self.recurrences, tou / self.recurrences)
-        #update weight matrix with average of accumulated gradient updates
-        self.update(tu / self.recurrences)
-        #return total error of this iteration
-        return totalError
-
-
-    def update(self, u):
-        #Implementation of RMSprop in the vanilla world
-        #We decay our learning rate to increase convergence speed
-        self.G = 0.95 * self.G + 0.1 * u**2
-        self.w -= self.learning_rate / np.sqrt(self.G + 1e-8) * u
-        return
-
-    #We define a sample function which produces the output once we trained our model
-    #let's say that we feed an input observed at time t, our model will produce an output that can be
-    #observe in time t+1
-    def sample(self):
-         #loop through recurrences - start at 1 so the 0th entry of all output will be an array of 0's
-        for i in range(1, self.recurrences + 1):
-            #set input for LSTM cell, combination of input (previous output) and previous hidden state
-            self.LSTM.x = np.hstack((self.ha[i - 1], self.x))
-            #run forward prop on the LSTM cell, retrieve cell state and hidden state
-            cs, hs, f, inp, c, o = self.LSTM.forwardProp()
-            #store input as vector
-            maxI = np.argmax(self.x)
-            self.x = np.zeros_like(self.x)
-            self.x[maxI] = 1
-            self.ia[i] = self.x  # Use np.argmax?
-            #store cell states
-            self.ca[i] = cs
-            #store hidden state
-            self.ha[i] = hs
-            #forget gate
-            self.af[i] = f
-            #input gate
-            self.ai[i] = inp
-            #cell state
-            self.ac[i] = c
-            #output gate
-            self.ao[i] = o
-            #calculate output by multiplying hidden state with weight matrix
-            self.oa[i] = self.sigmoid(np.dot(self.w, hs))
-            #compute new input
-            maxI = np.argmax(self.oa[i])
-            newX = np.zeros_like(self.x)
-            newX[maxI] = 1
-            self.x = newX
-        #return all outputs
-        return self.oa
-
-class LSTM:
-    # LSTM cell (input, output, amount of recurrence, learning rate)
-    def __init__(self, input, output, recurrences, learning_rate):
-        #input size
-        self.x = np.zeros(input + output)
-        #input size
-        self.input = input + output
-        #output
-        self.y = np.zeros(output)
-        #output size
-        self.output = output
-        #cell state intialized as size of prediction
-        self.cs = np.zeros(output)
-        #how often to perform recurrence
-        self.recurrences = recurrences
-        #balance the rate of training (learning rate)
-        self.learning_rate = learning_rate
-        #init weight matrices for our gates
-        #forget gate
-        self.f = np.random.random((output, input + output))
-        #input gate
-        self.i = np.random.random((output, input + output))
-        #cell state
-        self.c = np.random.random((output, input + output))
-        #output gate
-        self.o = np.random.random((output, input + output))
-        #forget gate gradient
-        self.Gf = np.zeros_like(self.f)
-        #input gate gradient
-        self.Gi = np.zeros_like(self.i)
-        #cell state gradient
-        self.Gc = np.zeros_like(self.c)
-        #output gate gradient
-        self.Go = np.zeros_like(self.o)
-
-
-    #activation function. simple nonlinearity, converts influx floats into probabilities between 0 and 1
-    #same as in rnn class
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-
-
-    #The derivativeative of the sigmoid function. We need it to compute gradients for backpropagation
-    def dsigmoid(self, x):
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
-
-
-    #Within the LSTM cell we are going to use a tanh activation function.
-    #Long story short: This leads to stronger gradients (derivativeatives are higher) which is usefull as our data is centered around 0,
-    def tangent(self, x):
-        return np.tanh(x)
-
-
-    #derivativeative for computing gradients
-    def dtangent(self, x):
-        return 1 - np.tanh(x)**2
-
-
-    #Here is where magic happens: We apply a series of matrix operations to our input and compute an output
-    def forwardProp(self):
-        f = self.sigmoid(np.dot(self.f, self.x))
-        self.cs *= f
-        i = self.sigmoid(np.dot(self.i, self.x))
-        c = self.tangent(np.dot(self.c, self.x))
-        self.cs += i * c
-        o = self.sigmoid(np.dot(self.o, self.x))
-        self.y = o * self.tangent(self.cs)
-        return self.cs, self.y, f, i, c, o
-
-
-    def backProp(self, e, pcs, f, i, c, o, dfcs, dfhs):
-        #error = error + hidden state derivativeative. we clip the value between -6 and 6 to prevent vanishing
-        e = np.clip(e + dfhs, -6, 6)
-        #multiply error by activated cell state to compute output derivativeative
-        do = self.tangent(self.cs) * e
-        #output update = (output derivative * activated output) * input
-        ou = np.dot(np.atleast_2d(do * self.dtangent(o)).T, np.atleast_2d(self.x))
-        #derivativeative of cell state = error * output * derivativeative of cell state + derivative cell
-        #compute gradients and update them in reverse order!
-        dcs = np.clip(e * o * self.dtangent(self.cs) + dfcs, -6, 6)
-        #derivativeative of cell = derivativeative cell state * input
-        dc = dcs * i
-        #cell update = derivativeative cell * activated cell * input
-        cu = np.dot(np.atleast_2d(dc * self.dtangent(c)).T, np.atleast_2d(self.x))
-        #derivativeative of input = derivative cell state * cell
-        di = dcs * c
-        #input update = (derivative input * activated input) * input
-        iu = np.dot(np.atleast_2d(di * self.dsigmoid(i)).T, np.atleast_2d(self.x))
-        #derivative forget = derivative cell state * all cell states
-        df = dcs * pcs
-        #forget update = (derivative forget * derivative forget) * input
-        fu = np.dot(np.atleast_2d(df * self.dsigmoid(f)).T, np.atleast_2d(self.x))
-        #derivative cell state = derivative cell state * forget
-        dpcs = dcs * f
-        #derivative hidden state = (derivative cell * cell) * output + derivative output * output * output derivative input * input * output + derivative forget
-        #* forget * output
-        dphs = np.dot(dc, self.c)[:self.output] + np.dot(do, self.o)[:self.output] + np.dot(di,
-                                                                                            self.i)[:self.output] + np.dot(df, self.f)[:self.output]
-        #return update gradients for forget, input, cell, output, cell state, hidden state
-        return fu, iu, cu, ou, dpcs, dphs
-
-
-    def update(self, fu, iu, cu, ou):
-        #Update forget, input, cell, and output gradients
-        self.Gf = 0.9 * self.Gf + 0.1 * fu**2
-        self.Gi = 0.9 * self.Gi + 0.1 * iu**2
-        self.Gc = 0.9 * self.Gc + 0.1 * cu**2
-        self.Go = 0.9 * self.Go + 0.1 * ou**2
-
-        #Update our gates using our gradients
-        self.f -= self.learning_rate / np.sqrt(self.Gf + 1e-8) * fu
-        self.i -= self.learning_rate / np.sqrt(self.Gi + 1e-8) * iu
-        self.c -= self.learning_rate / np.sqrt(self.Gc + 1e-8) * cu
-        self.o -= self.learning_rate / np.sqrt(self.Go + 1e-8) * ou
-
-# https://wp.firrm.de/index.php/2018/04/13/building-a-lstm-network-completely-from-scratch-no-libraries/
-"""
